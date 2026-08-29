@@ -12,6 +12,11 @@ limits:
   max_wait_sec: 10
 retry:
   max_attempts: 3
+llm:
+  max_tokens:               # per-role caps (course budget rules)
+    llm1: 800
+    llm2: 1600
+  reasoning_effort: minimal # gpt-5 family only; caps hidden reasoning spend
 table:
   max_table_age_hours: 72   # cache freshness bound (DESIGN.md 2c)
 default_index_map:          # used ONLY when no scan and no cache

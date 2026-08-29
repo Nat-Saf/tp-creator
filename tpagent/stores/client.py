@@ -7,9 +7,9 @@ dashboard supplies the same variables and no .env file exists.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[2]
+from tpagent.config import load_dotenv
+
 _client = None
 _override = None
 
@@ -20,23 +20,12 @@ def use_client(client) -> None:
     _override = client
 
 
-def _load_dotenv(path: Path = _ROOT / ".env") -> None:
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip())
-
-
 def get_client():
     if _override is not None:
         return _override
     global _client
     if _client is None:
-        _load_dotenv()
+        load_dotenv()
         url = os.environ.get("SUPABASE_URL")
         key = os.environ.get("SUPABASE_SERVICE_KEY")
         if not url or not key:

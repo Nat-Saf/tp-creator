@@ -10,25 +10,16 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
-from functools import lru_cache
-from pathlib import Path
 
-import yaml
-
+from tpagent.config import static_config
 from tpagent.reg_io import IO_DIR, Entry, RegIOTable, parse_reg_io_csv
 from tpagent.stores.client import get_client
 
 TABLE = "reg_io_tables"
-_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "static_config.yaml"
 
 
 class NoTableSource(Exception):
     """No scan, no fresh cache, no default map -> friendly ask upstream."""
-
-
-@lru_cache(maxsize=1)
-def _static_config() -> dict:
-    return yaml.safe_load(_CONFIG_PATH.read_text(encoding="utf-8")) or {}
 
 
 def _age_hours(scanned_at: str) -> float | None:
@@ -100,7 +91,7 @@ def materialize(cell_id: str, scan_csv: str | None = None, *,
                 client=None, config: dict | None = None) -> tuple[RegIOTable, str]:
     """SOFTWARE.md 6.9: scan > cache > default_map, else NoTableSource."""
     client = client or get_client()
-    cfg = config if config is not None else _static_config()
+    cfg = config if config is not None else static_config()
 
     if scan_csv:
         table, _ = cache_scan(cell_id, scan_csv, client=client)
