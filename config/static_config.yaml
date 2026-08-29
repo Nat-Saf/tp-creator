@@ -1,0 +1,21 @@
+# static_config.yaml -- developer-owned policy (DESIGN.md 4.3).
+# defaults are session-overridable via config_overrides; limits NEVER are.
+defaults:
+  speed: "100mm/sec"
+  pick_speed: "50mm/sec"
+  term: "FINE"
+  utool: 1
+  uframe: 1
+  gripper_settle_sec: 0.5
+limits:
+  max_speed_mmsec: 250
+  max_wait_sec: 10
+retry:
+  max_attempts: 3
+table:
+  max_table_age_hours: 72   # cache freshness bound (DESIGN.md 2c)
+default_index_map:          # used ONLY when no scan and no cache
+  PR:
+    1: "home"
+  IO:
+    "RO[1]": "gripper close"
