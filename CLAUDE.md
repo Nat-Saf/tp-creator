@@ -50,3 +50,22 @@
   on. tests/fixtures/reg_io_v1_template.csv and v1.ls are canonical fixtures.
 - TP_LLM2=mock:tests/fixtures/v1.ls is the development default. Live tokens
   only at the guide's Phase 7 smoke, deliberately.
+
+## Course delivery rules (override where conflicting)
+- Target: Vercel serverless (Python/FastAPI). NO local filesystem writes except
+  /tmp; ALL persistence via Supabase (stores layer). Any api call < 300 s.
+- LLM provider: LLMod.ai ONLY (OpenAI-compatible; LLMOD_BASE_URL/KEY).
+  Budget $9 TOTAL: temperature 0, max_tokens capped per role, retries <= 2,
+  never add an LLM call without stating its purpose and cost. TP_LLM2=mock
+  for all development; live models only for explicit smoke tests.
+- MODULE NAME REGISTRY (use EXACTLY these, everywhere - diagram, steps[],
+  descriptions): Runtime, LLM1-Intake, LLM1-Audit, Renderer, LLM2-Codegen,
+  Validator, RAG-Embed, RAG-Retrieve, Stores.
+- steps[] traces EVERY LLM-provider call (chat AND embeddings), in order:
+  {"module": <registry name>, "prompt": {...}, "response": {...}}.
+  The recorder wraps the client - no call can bypass it.
+- /api/execute response shape is EXACT: {"status","error","response","steps"}.
+  needs_clarification maps to status "ok" with response = the friendly
+  question; internal failures map to status "error" + human-readable error.
+- Public GitHub: corpus/raw/ NEVER committed; no keys in code or docs;
+  prepared/ contains own-words summaries only.
