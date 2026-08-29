@@ -89,7 +89,7 @@ class TestScriptedFlow:
         import json
         payload = json.loads(requests[0].content)
         assert payload["max_completion_tokens"] == 800
-        assert payload["reasoning_effort"] == "minimal"
+        assert payload["reasoning_effort"] == "low"   # per-role: llm1=low
         assert "temperature" not in payload      # gpt-5 rejects temperature=0
         assert "max_tokens" not in payload
 

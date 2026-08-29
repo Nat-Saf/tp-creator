@@ -1,0 +1,230 @@
+[
+  {
+    "prompt": "pick a part from the conveyor and put it on fixture A, gently",
+    "full_response": "/PROG PICK_PLACE_A\n/ATTR\nOWNER = MNEDITOR;\nCOMMENT = \"auto\";\n/MN\n   1:  UFRAME_NUM=1 ;\n   2:  UTOOL_NUM=1 ;\n   3:  !Pick from conveyor and place on Fixture A ;\n   4:  !Approach above pick and place, slow contact moves for pick/place ;\n   5:  !Wait after gripper actions for part settle ;\n   6:  !pick from conveyor ;\n   7:  J PR[1:home] 100% FINE ;\n   8:  L PR[6:conveyor approach] 100mm/sec CNT50 ;\n   9:  L PR[5:conveyor pick] 50mm/sec FINE ;\n  10:  RO[1:gripper close]=ON ;\n  11:  WAIT 1.00(sec) ;\n  12:  IF RI[1]=OFF,JMP LBL[20] ;\n  13:  L PR[6:conveyor approach] 100mm/sec CNT50 ;\n  14:  L PR[7:fixture A approach] 100mm/sec CNT50 ;\n  15:  L PR[8:fixture A place] 50mm/sec FINE ;\n  16:  RO[2:gripper open]=ON ;\n  17:  WAIT 1.00(sec) ;\n  18:  J PR[1:home] 100% FINE ;\n  19:  JMP LBL[99] ;\n  20:  !Gripper feedback not detected, open gripper and abort to home ;\n  21:  RO[2:gripper open]=ON ;\n  22:  WAIT 1.00(sec) ;\n  23:  J PR[1:home] 100% FINE ;\n  24:  LBL[99] ;\n/POS\n/END\n\n--- report ---\ntable source: cache(7h) (verified)\nretries: 0\ninferred: 'gently' -> increased gripper_settle_sec to 1.0s (overriding default 0.5s)\nadvisory: The register map comes from a scan cached 7h ago - re-scan if the cell has changed since.\nadvisory: Program never checks the 'part present' input (DI[3]) before committing to the pick move \u2014 the robot may descend and try to close the gripper on an empty location; add a DI[3] check at approach or before the contact move.\nadvisory: The routine uses a fixed 1.0 s WAIT to get gripper feedback (RI[1]) but ignores the provided max_wait_sec=10; replace the single WAIT+IF with a short polling loop and a configurable timeout to avoid false aborts or missed feedback.\nadvisory: Consider also verifying the conveyor-running signal (DI[4]) or other upstream interlocks before attempting the pick so the robot does not race against a stopped or mis-timed conveyor.",
+    "steps": [
+      {
+        "module": "LLM1-Intake",
+        "prompt": {
+          "model": "NBUECSE-gpt-5-mini",
+          "messages": [
+            {
+              "role": "system",
+              "content": "# TP Creator - orchestrator (LLM #1)\n\nYou are the intake brain of a FANUC TP program generator. You decide WHAT to\nbuild; a separate code generator writes the program and a deterministic\nvalidator checks it. You never write TP code yourself.\n\n## TP literacy (what you must know)\n\n- A TP program moves a robot: J (joint) moves fast between clear points,\n  L (linear) moves straight for approaches and contact, speeds like 100mm/sec\n  (J uses %), termination FINE (exact stop) or CNT0-100 (blend through).\n- Position registers PR[i] hold taught poses; registers R[i] hold numbers;\n  RO/DO outputs drive tools (grippers); DI/RI inputs sense the cell.\n- A pick-place skeleton: home -> approach above pick -> slow descend -> close\n  gripper -> settle wait -> lift -> travel -> approach place -> slow descend\n  -> open gripper -> settle wait -> retreat -> home.\n- Registers in the CELL TABLE have pendant notes (\"conveyor pick\"). Map the\n  user's words to indexes THROUGH the notes. Never invent a position.\n\n## The conversation transcript\n\nThe \"prompt\" field may hold a whole conversation transcript (earlier requests,\nyour questions, the user's answers). Treat it as context: the LAST user\nmessage is the current request; earlier turns resolve references like \"yes,\nfixture A\" or \"make it faster\".\n\n## Gap policy (strict order)\n\n1. A value the user stated -> use it (it becomes a config override).\n2. A value in effective defaults -> use the default silently.\n3. A position implied by a table note -> infer it and record the inference.\n4. Anything else that matters -> ask_user. NEVER invent positions or indexes\n   when a table is loaded. With NO table (empty robot), allocate indexes\n   sequentially from 1 unless the user names them.\n\nA register that EXISTS but is uninitialized (not yet taught) MAY be used\nwhen the user explicitly chose it - the program just carries a \"teach it\nbefore running\" advisory. Don't re-ask once the user has decided.\n\n## Parameter checklist per task\n\npick/place: pick position, place position, approach clearances, travel speed,\ncontact speed, gripper output + settle time, home.\n\nAMBIGUITY RULE (hard): if the user's place words match MORE THAN ONE table\nnote (e.g. \"the fixture\" matches both 'fixture A place' and 'fixture B\nplace'), you MUST ask_user naming every option with its index. Never\nsilently pick one - a wrong fixture crashes real hardware.\n\n## Output protocol (STRICT)\n\nReply with ONE JSON object and NOTHING else - no prose, no markdown. One of:\n\n{\"action\": \"rag_retrieve\", \"query\": \"<what syntax to look up>\"}\n{\"action\": \"generate_program\",\n \"params\": {\"task\": \"...\", \"<param>\": \"<value>\", ...},\n \"program_name\": \"<UPPERCASE_NAME>\",\n \"notes\": [\"comment lines worth including\"],\n \"inferred\": [{\"text\": \"<user words>\", \"decision\": \"<what you decided>\"}],\n \"base_draft\": null | \"<draft id being fixed>\",\n \"fix_guidance\": null | \"<how to fix the validator errors>\"}\n{\"action\": \"ask_user\", \"questions\": [\"<one friendly, self-contained question\n naming the concrete options>\"]}\n{\"action\": \"reject\", \"reason\": \"<friendly sentence: only FANUC TP program\n requests are in scope>\"}\n\nRules: params must contain every value the generator needs (positions as\n\"PR[i] 'note'\", speeds, gripper signal, settle). rag_retrieve at most twice,\nonly when unsure of a syntax form. After validator errors, either fix (set\nbase_draft + fix_guidance and adjust params) or ask_user - if the escalation\nflag is set, do NOT retry the same approach again. \"reject\" is ONLY for\nrequests that are not FANUC TP program requests at all - NEVER because\ndrafts kept failing (fix or ask instead). Never mention validators, drafts,\nattempts or any internal machinery in text the user will read.\n\nEvery question or reason you write reaches a human: plain, friendly,\nself-contained sentences naming the concrete thing needed. Never status-code\nlanguage.\n\n## Few-shot: prompt -> params\n\n\"pick a part from the conveyor and put it on fixture A, gently\"\n-> {\"action\":\"generate_program\",\"params\":{\"task\":\"pick from conveyor, place\non fixture A\",\"pick\":\"PR[5] 'conveyor pick'\",\"pick_approach\":\"PR[6] 'conveyor\napproach'\",\"place\":\"PR[8] 'fixture A place'\",\"place_approach\":\"PR[7] 'fixture\nA approach'\",\"home\":\"PR[1] 'home'\",\"travel_speed\":\"100mm/sec\",\"contact_speed\":\n\"50mm/sec\",\"gripper\":\"RO[1] 'gripper close'\",\"gripper_settle_sec\":\"1.0\"},\n\"program_name\":\"PICK_PLACE_A\",\"notes\":[\"pick from conveyor\",\"place on fixture\nA\"],\"inferred\":[{\"text\":\"gently\",\"decision\":\"settle 1.0s instead of default\n0.5s\"}],\"base_draft\":null,\"fix_guidance\":null}\n\n\"put it on the fixture\" (two fixture notes in the table)\n-> {\"action\":\"ask_user\",\"questions\":[\"Which fixture should I place the part\non - fixture A (PR[8] 'fixture A place') or fixture B (PR[9] 'fixture B\nplace')?\"]}\n"
+            },
+            {
+              "role": "user",
+              "content": "{\"effective_defaults\": {\"gripper_settle_sec\": 0.5, \"pick_speed\": \"50mm/sec\", \"speed\": \"100mm/sec\", \"term\": \"FINE\", \"uframe\": 1, \"utool\": 1}, \"example_attached\": false, \"limits\": {\"max_speed_mmsec\": 250, \"max_wait_sec\": 10}, \"prompt\": \"pick a part from the conveyor and put it on fixture A, gently\", \"table\": {\"entries\": [{\"initialized\": true, \"note\": \"home\", \"ref\": \"PR[1]\"}, {\"initialized\": true, \"note\": \"conveyor pick\", \"ref\": \"PR[5]\"}, {\"initialized\": true, \"note\": \"conveyor approach\", \"ref\": \"PR[6]\"}, {\"initialized\": true, \"note\": \"fixture A approach\", \"ref\": \"PR[7]\"}, {\"initialized\": true, \"note\": \"fixture A place\", \"ref\": \"PR[8]\"}, {\"initialized\": true, \"note\": \"fixture B place\", \"ref\": \"PR[9]\"}, {\"initialized\": false, \"note\": \"\", \"ref\": \"PR[10]\"}, {\"initialized\": true, \"note\": \"cycle count\", \"ref\": \"R[1]\"}, {\"initialized\": true, \"note\": \"part counter\", \"ref\": \"R[3]\"}, {\"initialized\": true, \"note\": \"\", \"ref\": \"R[4]\"}, {\"initialized\": true, \"note\": \"barcode buffer\", \"ref\": \"SR[1]\"}, {\"initialized\": true, \"note\": \"recipe name, active\", \"ref\": \"SR[2]\"}, {\"initialized\": true, \"note\": \"pallet A pattern\", \"ref\": \"PL[1]\"}, {\"initialized\": null, \"note\": \"part present\", \"ref\": \"DI[3]\"}, {\"initialized\": null, \"note\": \"conveyor running\", \"ref\": \"DI[4]\"}, {\"initialized\": null, \"note\": \"\", \"ref\": \"DI[7]\"}, {\"initialized\": null, \"note\": \"green lamp\", \"ref\": \"DO[7]\"}, {\"initialized\": null, \"note\": \"gripper closed feedback\", \"ref\": \"RI[1]\"}, {\"initialized\": null, \"note\": \"gripper close\", \"ref\": \"RO[1]\"}, {\"initialized\": null, \"note\": \"gripper open\", \"ref\": \"RO[2]\"}, {\"initialized\": null, \"note\": \"\", \"ref\": \"UI[5]\"}, {\"initialized\": null, \"note\": \"cmd enabled\", \"ref\": \"UO[1]\"}, {\"initialized\": null, \"note\": \"part type code\", \"ref\": \"GI[1]\"}, {\"initialized\": null, \"note\": \"vacuum pressure\", \"ref\": \"AI[1]\"}, {\"initialized\": null, \"note\": \"cycle active flag\", \"ref\": \"F[12]\"}], \"source\": \"cache(7h)\"}}"
+            }
+          ],
+          "max_completion_tokens": 800,
+          "reasoning_effort": "low"
+        },
+        "response": {
+          "id": "chatcmpl-EIIoTWDtnGP4l51f0L47Sz8dDhA3p",
+          "created": 1788030929,
+          "model": "NBUECSE-gpt-5-mini",
+          "object": "chat.completion",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "{\"action\":\"generate_program\",\"params\":{\"task\":\"pick from conveyor, place on fixture A\",\"pick\":\"PR[5] 'conveyor pick'\",\"pick_approach\":\"PR[6] 'conveyor approach'\",\"place\":\"PR[8] 'fixture A place'\",\"place_approach\":\"PR[7] 'fixture A approach'\",\"home\":\"PR[1] 'home'\",\"travel_speed\":\"100mm/sec\",\"pick_contact_speed\":\"50mm/sec\",\"place_contact_speed\":\"50mm/sec\",\"termination\":\"FINE\",\"uframe\":\"UF[1]\",\"utool\":\"UT[1]\",\"gripper_close\":\"RO[1] 'gripper close'\",\"gripper_open\":\"RO[2] 'gripper open'\",\"gripper_feedback\":\"RI[1] 'gripper closed feedback'\",\"gripper_settle_sec\":\"1.0\",\"pick_presence_input\":\"DI[3] 'part present'\",\"max_wait_sec\":10},\"program_name\":\"PICK_PLACE_A\",\"notes\":[\"Pick from conveyor and place on Fixture A\",\"Approach above pick and place, slow contact moves for pick/place\",\"Wait after gripper actions for part settle\"],\"inferred\":[{\"text\":\"gently\",\"decision\":\"increased gripper_settle_sec to 1.0s (overriding default 0.5s)\"}],\"base_draft\":null,\"fix_guidance\":null}",
+                "role": "assistant",
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 556,
+            "prompt_tokens": 1825,
+            "total_tokens": 2381,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 256,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      },
+      {
+        "module": "LLM2-Codegen",
+        "prompt": {
+          "model": "NBUECSE-gpt-5-mini",
+          "messages": [
+            {
+              "role": "user",
+              "content": "You are a senior FANUC TP programmer writing a program for a real robot cell.\nOutput ONLY the raw .LS program text - no markdown fences, no explanations.\n\nA canonical program looks EXACTLY like this (structure, numbering, spacing):\n/PROG PICK_PLACE_A\n/ATTR\nOWNER = MNEDITOR;\nCOMMENT = \"auto\";\n/MN\n   1:  UFRAME_NUM=1 ;\n   2:  UTOOL_NUM=1 ;\n   3:  !pick from conveyor ;\n   4:  J PR[1:home] 100% FINE ;\n   5:  L PR[6:conveyor approach] 100mm/sec CNT50 ;\n   6:  L PR[5:conveyor pick] 50mm/sec FINE ;\n   7:  RO[1:gripper close]=ON ;\n   8:  WAIT 1.00(sec) ;\n   9:  L PR[6] 100mm/sec CNT50 ;\n  10:  L PR[8:fixture A place] 50mm/sec FINE ;\n  11:  RO[1]=OFF ;\n  12:  WAIT .50(sec) ;\n  13:  J PR[1:home] 100% FINE ;\n/POS\n/END\n\nHard rules:\n- Every /MN body line is \"  <n>:  <instruction> ;\" - numbered, ending \" ;\".\n- Comments are \"!text ;\" lines. NEVER use \";\" or \"//\" comments.\n- J speed is a percent (100%); L speed is mm/sec. Termination is FINE or\n  CNT0-100 (CNT always needs its number).\n- WAIT forms: \"WAIT 1.00(sec)\" or \"WAIT DI[3]=ON TIMEOUT,LBL[10]\". No other\n  wait spelling exists.\n- IF uses a single \"=\", e.g. \"IF DI[3]=ON,JMP LBL[10]\".\n- Keep /ATTR to OWNER and COMMENT only. Never invent instructions (no\n  TOOL[...], no $-variable SET lines).\n- Use FINE at contact points and on the final move; CNT for travel.\n- Output the COMPLETE program through /END - never stop early.\nFollow the CELL section exactly - its registers, limits and defaults are law.\n\nCELL line3_fanuc1\nDefaults (use unless the task says otherwise):\n  gripper_settle_sec: 0.5\n  pick_speed: 50mm/sec\n  speed: 100mm/sec\n  term: FINE\n  uframe: 1\n  utool: 1\nHard limits (never exceed):\n  max_speed_mmsec: 250\n  max_wait_sec: 10\nRegisters and IO in this cell - use ONLY these (exact indexes):\nPR[1] home\nPR[5] conveyor pick\nPR[6] conveyor approach\nPR[7] fixture A approach\nPR[8] fixture A place\nPR[9] fixture B place\nPR[10] (no label) (uninitialized)\nR[1] cycle count\nR[3] part counter\nR[4] (no label)\nSR[1] barcode buffer\nSR[2] recipe name, active\nPL[1] pallet A pattern\nDI[3] part present\nDI[4] conveyor running\nDI[7] (no label)\nDO[7] green lamp\nRI[1] gripper closed feedback\nRO[1] gripper close\nRO[2] gripper open\nUI[5] (no label)\nUO[1] cmd enabled\nGI[1] part type code\nAI[1] vacuum pressure\nF[12] cycle active flag\nEntries marked (uninitialized) exist but hold no taught value - do not use them.\n\nTASK:\n  gripper_close: RO[1] 'gripper close'\n  gripper_feedback: RI[1] 'gripper closed feedback'\n  gripper_open: RO[2] 'gripper open'\n  gripper_settle_sec: 1.0\n  home: PR[1] 'home'\n  max_wait_sec: 10\n  pick: PR[5] 'conveyor pick'\n  pick_approach: PR[6] 'conveyor approach'\n  pick_contact_speed: 50mm/sec\n  pick_presence_input: DI[3] 'part present'\n  place: PR[8] 'fixture A place'\n  place_approach: PR[7] 'fixture A approach'\n  place_contact_speed: 50mm/sec\n  task: pick from conveyor, place on fixture A\n  termination: FINE\n  travel_speed: 100mm/sec\n  uframe: UF[1]\n  utool: UT[1]\n\nPROGRAM NAME: PICK_PLACE_A\nInclude these as ! comments where they apply:\n  - Pick from conveyor and place on Fixture A\n  - Approach above pick and place, slow contact moves for pick/place\n  - Wait after gripper actions for part settle\n"
+            }
+          ],
+          "max_completion_tokens": 3000,
+          "reasoning_effort": "minimal"
+        },
+        "response": {
+          "id": "chatcmpl-EIIoaH101gYCuT8FWE2hVh8NhmkmI",
+          "created": 1788030936,
+          "model": "NBUECSE-gpt-5-mini",
+          "object": "chat.completion",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "/PROG PICK_PLACE_A\n/ATTR\nOWNER = MNEDITOR;\nCOMMENT = \"auto\";\n/MN\n   1:  UFRAME_NUM=1 ;\n   2:  UTOOL_NUM=1 ;\n   3:  !Pick from conveyor and place on Fixture A ;\n   4:  !Approach above pick and place, slow contact moves for pick/place ;\n   5:  !Wait after gripper actions for part settle ;\n   6:  !pick from conveyor ;\n   7:  J PR[1:home] 100% FINE ;\n   8:  L PR[6:conveyor approach] 100mm/sec CNT50 ;\n   9:  L PR[5:conveyor pick] 50mm/sec FINE ;\n  10:  RO[1:gripper close]=ON ;\n  11:  WAIT 1.00(sec) ;\n  12:  IF RI[1]=OFF,JMP LBL[20] ;\n  13:  L PR[6:conveyor approach] 100mm/sec CNT50 ;\n  14:  L PR[7:fixture A approach] 100mm/sec CNT50 ;\n  15:  L PR[8:fixture A place] 50mm/sec FINE ;\n  16:  RO[2:gripper open]=ON ;\n  17:  WAIT 1.00(sec) ;\n  18:  J PR[1:home] 100% FINE ;\n  19:  JMP LBL[99] ;\n  20:  !Gripper feedback not detected, open gripper and abort to home ;\n  21:  RO[2:gripper open]=ON ;\n  22:  WAIT 1.00(sec) ;\n  23:  J PR[1:home] 100% FINE ;\n  24:  LBL[99] ;\n/POS\n/END",
+                "role": "assistant",
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 424,
+            "prompt_tokens": 1069,
+            "total_tokens": 1493,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      },
+      {
+        "module": "LLM1-Audit",
+        "prompt": {
+          "model": "NBUECSE-gpt-5-mini",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are auditing a FANUC TP program that already passed a\ndeterministic validator. Judge SEMANTICS only: does the program plausibly do\nwhat the task params say, are approach/retreat moves sensible, is anything\nrisky worth a human look? You cannot block delivery.\n\nReply with ONE JSON object, nothing else:\n{\"advisories\": [\"<plain, friendly, self-contained sentence>\", ...]}\nReturn an empty list when nothing is worth flagging. At most 3 advisories."
+            },
+            {
+              "role": "user",
+              "content": "{\"params\": {\"gripper_close\": \"RO[1] 'gripper close'\", \"gripper_feedback\": \"RI[1] 'gripper closed feedback'\", \"gripper_open\": \"RO[2] 'gripper open'\", \"gripper_settle_sec\": \"1.0\", \"home\": \"PR[1] 'home'\", \"max_wait_sec\": 10, \"pick\": \"PR[5] 'conveyor pick'\", \"pick_approach\": \"PR[6] 'conveyor approach'\", \"pick_contact_speed\": \"50mm/sec\", \"pick_presence_input\": \"DI[3] 'part present'\", \"place\": \"PR[8] 'fixture A place'\", \"place_approach\": \"PR[7] 'fixture A approach'\", \"place_contact_speed\": \"50mm/sec\", \"task\": \"pick from conveyor, place on fixture A\", \"termination\": \"FINE\", \"travel_speed\": \"100mm/sec\", \"uframe\": \"UF[1]\", \"utool\": \"UT[1]\"}, \"program\": \"/PROG PICK_PLACE_A\\n/ATTR\\nOWNER = MNEDITOR;\\nCOMMENT = \\\"auto\\\";\\n/MN\\n   1:  UFRAME_NUM=1 ;\\n   2:  UTOOL_NUM=1 ;\\n   3:  !Pick from conveyor and place on Fixture A ;\\n   4:  !Approach above pick and place, slow contact moves for pick/place ;\\n   5:  !Wait after gripper actions for part settle ;\\n   6:  !pick from conveyor ;\\n   7:  J PR[1:home] 100% FINE ;\\n   8:  L PR[6:conveyor approach] 100mm/sec CNT50 ;\\n   9:  L PR[5:conveyor pick] 50mm/sec FINE ;\\n  10:  RO[1:gripper close]=ON ;\\n  11:  WAIT 1.00(sec) ;\\n  12:  IF RI[1]=OFF,JMP LBL[20] ;\\n  13:  L PR[6:conveyor approach] 100mm/sec CNT50 ;\\n  14:  L PR[7:fixture A approach] 100mm/sec CNT50 ;\\n  15:  L PR[8:fixture A place] 50mm/sec FINE ;\\n  16:  RO[2:gripper open]=ON ;\\n  17:  WAIT 1.00(sec) ;\\n  18:  J PR[1:home] 100% FINE ;\\n  19:  JMP LBL[99] ;\\n  20:  !Gripper feedback not detected, open gripper and abort to home ;\\n  21:  RO[2:gripper open]=ON ;\\n  22:  WAIT 1.00(sec) ;\\n  23:  J PR[1:home] 100% FINE ;\\n  24:  LBL[99] ;\\n/POS\\n/END\\n\", \"table_notes\": [{\"initialized\": true, \"note\": \"home\", \"ref\": \"PR[1]\"}, {\"initialized\": true, \"note\": \"conveyor pick\", \"ref\": \"PR[5]\"}, {\"initialized\": true, \"note\": \"conveyor approach\", \"ref\": \"PR[6]\"}, {\"initialized\": true, \"note\": \"fixture A approach\", \"ref\": \"PR[7]\"}, {\"initialized\": true, \"note\": \"fixture A place\", \"ref\": \"PR[8]\"}, {\"initialized\": true, \"note\": \"fixture B place\", \"ref\": \"PR[9]\"}, {\"initialized\": false, \"note\": \"\", \"ref\": \"PR[10]\"}, {\"initialized\": true, \"note\": \"cycle count\", \"ref\": \"R[1]\"}, {\"initialized\": true, \"note\": \"part counter\", \"ref\": \"R[3]\"}, {\"initialized\": true, \"note\": \"\", \"ref\": \"R[4]\"}, {\"initialized\": true, \"note\": \"barcode buffer\", \"ref\": \"SR[1]\"}, {\"initialized\": true, \"note\": \"recipe name, active\", \"ref\": \"SR[2]\"}, {\"initialized\": true, \"note\": \"pallet A pattern\", \"ref\": \"PL[1]\"}, {\"initialized\": null, \"note\": \"part present\", \"ref\": \"DI[3]\"}, {\"initialized\": null, \"note\": \"conveyor running\", \"ref\": \"DI[4]\"}, {\"initialized\": null, \"note\": \"\", \"ref\": \"DI[7]\"}, {\"initialized\": null, \"note\": \"green lamp\", \"ref\": \"DO[7]\"}, {\"initialized\": null, \"note\": \"gripper closed feedback\", \"ref\": \"RI[1]\"}, {\"initialized\": null, \"note\": \"gripper close\", \"ref\": \"RO[1]\"}, {\"initialized\": null, \"note\": \"gripper open\", \"ref\": \"RO[2]\"}, {\"initialized\": null, \"note\": \"\", \"ref\": \"UI[5]\"}, {\"initialized\": null, \"note\": \"cmd enabled\", \"ref\": \"UO[1]\"}, {\"initialized\": null, \"note\": \"part type code\", \"ref\": \"GI[1]\"}, {\"initialized\": null, \"note\": \"vacuum pressure\", \"ref\": \"AI[1]\"}, {\"initialized\": null, \"note\": \"cycle active flag\", \"ref\": \"F[12]\"}]}"
+            }
+          ],
+          "max_completion_tokens": 800,
+          "reasoning_effort": "low"
+        },
+        "response": {
+          "id": "chatcmpl-EIIogVLKDCWnfqbUPEwz3ngSLEBxK",
+          "created": 1788030942,
+          "model": "NBUECSE-gpt-5-mini",
+          "object": "chat.completion",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "{\"advisories\":[\"Program never checks the 'part present' input (DI[3]) before committing to the pick move \u2014 the robot may descend and try to close the gripper on an empty location; add a DI[3] check at approach or before the contact move.\",\"The routine uses a fixed 1.0 s WAIT to get gripper feedback (RI[1]) but ignores the provided max_wait_sec=10; replace the single WAIT+IF with a short polling loop and a configurable timeout to avoid false aborts or missed feedback.\",\"Consider also verifying the conveyor-running signal (DI[4]) or other upstream interlocks before attempting the pick so the robot does not race against a stopped or mis-timed conveyor.\"]}",
+                "role": "assistant",
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 481,
+            "prompt_tokens": 1341,
+            "total_tokens": 1822,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 320,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    ]
+  },
+  {
+    "prompt": "pick a part from the conveyor and put it on the fixture",
+    "full_response": "Which fixture should I place the part on - fixture A (PR[8] 'fixture A place') or fixture B (PR[9] 'fixture B place')?",
+    "steps": [
+      {
+        "module": "LLM1-Intake",
+        "prompt": {
+          "model": "NBUECSE-gpt-5-mini",
+          "messages": [
+            {
+              "role": "system",
+              "content": "# TP Creator - orchestrator (LLM #1)\n\nYou are the intake brain of a FANUC TP program generator. You decide WHAT to\nbuild; a separate code generator writes the program and a deterministic\nvalidator checks it. You never write TP code yourself.\n\n## TP literacy (what you must know)\n\n- A TP program moves a robot: J (joint) moves fast between clear points,\n  L (linear) moves straight for approaches and contact, speeds like 100mm/sec\n  (J uses %), termination FINE (exact stop) or CNT0-100 (blend through).\n- Position registers PR[i] hold taught poses; registers R[i] hold numbers;\n  RO/DO outputs drive tools (grippers); DI/RI inputs sense the cell.\n- A pick-place skeleton: home -> approach above pick -> slow descend -> close\n  gripper -> settle wait -> lift -> travel -> approach place -> slow descend\n  -> open gripper -> settle wait -> retreat -> home.\n- Registers in the CELL TABLE have pendant notes (\"conveyor pick\"). Map the\n  user's words to indexes THROUGH the notes. Never invent a position.\n\n## The conversation transcript\n\nThe \"prompt\" field may hold a whole conversation transcript (earlier requests,\nyour questions, the user's answers). Treat it as context: the LAST user\nmessage is the current request; earlier turns resolve references like \"yes,\nfixture A\" or \"make it faster\".\n\n## Gap policy (strict order)\n\n1. A value the user stated -> use it (it becomes a config override).\n2. A value in effective defaults -> use the default silently.\n3. A position implied by a table note -> infer it and record the inference.\n4. Anything else that matters -> ask_user. NEVER invent positions or indexes\n   when a table is loaded. With NO table (empty robot), allocate indexes\n   sequentially from 1 unless the user names them.\n\nA register that EXISTS but is uninitialized (not yet taught) MAY be used\nwhen the user explicitly chose it - the program just carries a \"teach it\nbefore running\" advisory. Don't re-ask once the user has decided.\n\n## Parameter checklist per task\n\npick/place: pick position, place position, approach clearances, travel speed,\ncontact speed, gripper output + settle time, home.\n\nAMBIGUITY RULE (hard): if the user's place words match MORE THAN ONE table\nnote (e.g. \"the fixture\" matches both 'fixture A place' and 'fixture B\nplace'), you MUST ask_user naming every option with its index. Never\nsilently pick one - a wrong fixture crashes real hardware.\n\n## Output protocol (STRICT)\n\nReply with ONE JSON object and NOTHING else - no prose, no markdown. One of:\n\n{\"action\": \"rag_retrieve\", \"query\": \"<what syntax to look up>\"}\n{\"action\": \"generate_program\",\n \"params\": {\"task\": \"...\", \"<param>\": \"<value>\", ...},\n \"program_name\": \"<UPPERCASE_NAME>\",\n \"notes\": [\"comment lines worth including\"],\n \"inferred\": [{\"text\": \"<user words>\", \"decision\": \"<what you decided>\"}],\n \"base_draft\": null | \"<draft id being fixed>\",\n \"fix_guidance\": null | \"<how to fix the validator errors>\"}\n{\"action\": \"ask_user\", \"questions\": [\"<one friendly, self-contained question\n naming the concrete options>\"]}\n{\"action\": \"reject\", \"reason\": \"<friendly sentence: only FANUC TP program\n requests are in scope>\"}\n\nRules: params must contain every value the generator needs (positions as\n\"PR[i] 'note'\", speeds, gripper signal, settle). rag_retrieve at most twice,\nonly when unsure of a syntax form. After validator errors, either fix (set\nbase_draft + fix_guidance and adjust params) or ask_user - if the escalation\nflag is set, do NOT retry the same approach again. \"reject\" is ONLY for\nrequests that are not FANUC TP program requests at all - NEVER because\ndrafts kept failing (fix or ask instead). Never mention validators, drafts,\nattempts or any internal machinery in text the user will read.\n\nEvery question or reason you write reaches a human: plain, friendly,\nself-contained sentences naming the concrete thing needed. Never status-code\nlanguage.\n\n## Few-shot: prompt -> params\n\n\"pick a part from the conveyor and put it on fixture A, gently\"\n-> {\"action\":\"generate_program\",\"params\":{\"task\":\"pick from conveyor, place\non fixture A\",\"pick\":\"PR[5] 'conveyor pick'\",\"pick_approach\":\"PR[6] 'conveyor\napproach'\",\"place\":\"PR[8] 'fixture A place'\",\"place_approach\":\"PR[7] 'fixture\nA approach'\",\"home\":\"PR[1] 'home'\",\"travel_speed\":\"100mm/sec\",\"contact_speed\":\n\"50mm/sec\",\"gripper\":\"RO[1] 'gripper close'\",\"gripper_settle_sec\":\"1.0\"},\n\"program_name\":\"PICK_PLACE_A\",\"notes\":[\"pick from conveyor\",\"place on fixture\nA\"],\"inferred\":[{\"text\":\"gently\",\"decision\":\"settle 1.0s instead of default\n0.5s\"}],\"base_draft\":null,\"fix_guidance\":null}\n\n\"put it on the fixture\" (two fixture notes in the table)\n-> {\"action\":\"ask_user\",\"questions\":[\"Which fixture should I place the part\non - fixture A (PR[8] 'fixture A place') or fixture B (PR[9] 'fixture B\nplace')?\"]}\n"
+            },
+            {
+              "role": "user",
+              "content": "{\"effective_defaults\": {\"gripper_settle_sec\": 0.5, \"pick_speed\": \"50mm/sec\", \"speed\": \"100mm/sec\", \"term\": \"FINE\", \"uframe\": 1, \"utool\": 1}, \"example_attached\": false, \"limits\": {\"max_speed_mmsec\": 250, \"max_wait_sec\": 10}, \"prompt\": \"pick a part from the conveyor and put it on the fixture\", \"table\": {\"entries\": [{\"initialized\": true, \"note\": \"home\", \"ref\": \"PR[1]\"}, {\"initialized\": true, \"note\": \"conveyor pick\", \"ref\": \"PR[5]\"}, {\"initialized\": true, \"note\": \"conveyor approach\", \"ref\": \"PR[6]\"}, {\"initialized\": true, \"note\": \"fixture A approach\", \"ref\": \"PR[7]\"}, {\"initialized\": true, \"note\": \"fixture A place\", \"ref\": \"PR[8]\"}, {\"initialized\": true, \"note\": \"fixture B place\", \"ref\": \"PR[9]\"}, {\"initialized\": false, \"note\": \"\", \"ref\": \"PR[10]\"}, {\"initialized\": true, \"note\": \"cycle count\", \"ref\": \"R[1]\"}, {\"initialized\": true, \"note\": \"part counter\", \"ref\": \"R[3]\"}, {\"initialized\": true, \"note\": \"\", \"ref\": \"R[4]\"}, {\"initialized\": true, \"note\": \"barcode buffer\", \"ref\": \"SR[1]\"}, {\"initialized\": true, \"note\": \"recipe name, active\", \"ref\": \"SR[2]\"}, {\"initialized\": true, \"note\": \"pallet A pattern\", \"ref\": \"PL[1]\"}, {\"initialized\": null, \"note\": \"part present\", \"ref\": \"DI[3]\"}, {\"initialized\": null, \"note\": \"conveyor running\", \"ref\": \"DI[4]\"}, {\"initialized\": null, \"note\": \"\", \"ref\": \"DI[7]\"}, {\"initialized\": null, \"note\": \"green lamp\", \"ref\": \"DO[7]\"}, {\"initialized\": null, \"note\": \"gripper closed feedback\", \"ref\": \"RI[1]\"}, {\"initialized\": null, \"note\": \"gripper close\", \"ref\": \"RO[1]\"}, {\"initialized\": null, \"note\": \"gripper open\", \"ref\": \"RO[2]\"}, {\"initialized\": null, \"note\": \"\", \"ref\": \"UI[5]\"}, {\"initialized\": null, \"note\": \"cmd enabled\", \"ref\": \"UO[1]\"}, {\"initialized\": null, \"note\": \"part type code\", \"ref\": \"GI[1]\"}, {\"initialized\": null, \"note\": \"vacuum pressure\", \"ref\": \"AI[1]\"}, {\"initialized\": null, \"note\": \"cycle active flag\", \"ref\": \"F[12]\"}], \"source\": \"cache(7h)\"}}"
+            }
+          ],
+          "max_completion_tokens": 800,
+          "reasoning_effort": "low"
+        },
+        "response": {
+          "id": "chatcmpl-EIIomZpaOTraAi5FumH24iYzRc3fg",
+          "created": 1788030948,
+          "model": "NBUECSE-gpt-5-mini",
+          "object": "chat.completion",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "{\"action\":\"ask_user\",\"questions\":[\"Which fixture should I place the part on - fixture A (PR[8] 'fixture A place') or fixture B (PR[9] 'fixture B place')?\"]}",
+                "role": "assistant",
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 118,
+            "prompt_tokens": 1823,
+            "total_tokens": 1941,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 64,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    ]
+  }
+]

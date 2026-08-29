@@ -59,11 +59,13 @@ class Verdict:
     verdict: str                     # pass | fail
     errors: list[Err] = field(default_factory=list)
     stats: dict = field(default_factory=dict)
+    warnings: list = field(default_factory=list)   # non-blocking, friendly
 
     def to_dict(self) -> dict:
         return {"verdict": self.verdict,
                 "errors": [e.to_dict() for e in self.errors],
-                "stats": self.stats}
+                "stats": self.stats,
+                "warnings": list(self.warnings)}
 
 
 def run(text: str, table, limits: dict, mode: str = "gate") -> Verdict:
@@ -71,13 +73,15 @@ def run(text: str, table, limits: dict, mode: str = "gate") -> Verdict:
     from tpagent.validator import limits as limits_layer
 
     errors, stats = grammar.check(text)
+    warnings: list = []
     if mode == "gate":
-        errors = errors + existence.check(text, table)
+        exist_errors, warnings = existence.check(text, table)
+        errors = errors + exist_errors
         limit_errors = limits_layer.check(text, limits or {})
         errors = errors + limit_errors
         stats["limits_ok"] = not limit_errors
     return Verdict(verdict="pass" if not errors else "fail",
-                   errors=errors, stats=stats)
+                   errors=errors, stats=stats, warnings=warnings)
 
 
 def _friendly(err: Err) -> str:

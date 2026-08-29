@@ -161,7 +161,8 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
             verdict = validate(draft.text, check_table, limits)
             sess.save_verdict(draft_id, verdict.verdict,
                               errors=[e.to_dict() for e in verdict.errors],
-                              stats=verdict.stats)
+                              stats={**verdict.stats,
+                                     "warnings": verdict.warnings})
             if verdict.verdict == "pass":
                 program = draft.text
                 break
@@ -199,7 +200,8 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
         positions=_positions(program, table),
         inferred=inferred,
         retries=attempts - 1,
-        advisories=_mandatory_advisories(source) + advisories)
+        advisories=_mandatory_advisories(source) + verdict.warnings
+        + advisories)
     file_ref = output_store.save(sess.id, draft_id, program_name, program,
                                  asdict(report), client=sb_client)
     sess.log_decision(f"delivered {draft_id} after {attempts} attempt(s)")

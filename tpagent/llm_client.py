@@ -52,7 +52,8 @@ def _max_tokens(role: str) -> int:
     return int(cfg.get(role, DEFAULT_MAX_TOKENS[role]))
 
 
-def _chat_payload(model: str, messages: list[dict], max_tokens: int) -> dict:
+def _chat_payload(model: str, messages: list[dict], max_tokens: int,
+                  role: str) -> dict:
     # The LLMod gateway (LiteLLM) rejects temperature!=1 for gpt-5 models
     # and wants max_completion_tokens; reasoning_effort caps the hidden
     # reasoning spend (probed live 2026-08-29). Determinism for gpt-5 comes
@@ -60,6 +61,8 @@ def _chat_payload(model: str, messages: list[dict], max_tokens: int) -> dict:
     if "gpt-5" in model:
         effort = (config.static_config().get("llm") or {}).get(
             "reasoning_effort", "minimal")
+        if isinstance(effort, dict):            # per-role since Phase 7
+            effort = effort.get(role, "minimal")
         return {"model": model, "messages": messages,
                 "max_completion_tokens": max_tokens,
                 "reasoning_effort": effort}
@@ -153,7 +156,7 @@ class LLMClient:
             return text
 
         if backend == "llmod":
-            payload = _chat_payload(arg, messages, _max_tokens(role))
+            payload = _chat_payload(arg, messages, _max_tokens(role), role)
             data = self._recorded_post(module, "/chat/completions", payload)
             try:
                 return data["choices"][0]["message"]["content"]

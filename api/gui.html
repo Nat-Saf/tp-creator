@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TP Creator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: #f4f5f7; color: #1c2128; line-height: 1.45; }
+  header { background: #101418; color: #fff; padding: 14px 0; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+  header .wrap { display: flex; align-items: baseline; gap: 12px; }
+  h1 { font-size: 1.15rem; font-weight: 650; }
+  header span { color: #8b949e; font-size: .82rem; }
+  main { padding: 18px 0 90px; }
+  .card { background: #fff; border: 1px solid #e2e5e9; border-radius: 10px;
+          padding: 14px 16px; margin: 0 0 12px; }
+  .who { font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+         text-transform: uppercase; color: #6a737d; margin-bottom: 6px; }
+  .user-card { border-left: 4px solid #2f6feb; }
+  .assistant-card { border-left: 4px solid #1a7f37; }
+  .error-card { border-left: 4px solid #cf222e; }
+  .error-card .who { color: #cf222e; }
+  .report { background: #f0f6ff; border: 1px solid #d0e0f7; border-radius: 8px;
+            padding: 10px 12px; margin-bottom: 10px; font-size: .88rem;
+            white-space: pre-wrap; }
+  pre { background: #0e1116; color: #dfe5ec; border-radius: 8px;
+        padding: 12px 14px; overflow-x: auto; font-size: .84rem;
+        font-family: ui-monospace, Consolas, monospace; }
+  .msg { white-space: pre-wrap; }
+  details.steps { margin-top: 10px; }
+  details.steps > summary { cursor: pointer; font-size: .85rem;
+        color: #2f6feb; font-weight: 600; user-select: none; }
+  details.step { margin: 8px 0 0 6px; border: 1px solid #e2e5e9;
+                 border-radius: 8px; padding: 8px 10px; background: #fafbfc; }
+  details.step > summary { cursor: pointer; font-weight: 650;
+                           font-size: .85rem; }
+  details.step h4 { font-size: .7rem; text-transform: uppercase;
+                    letter-spacing: .05em; color: #6a737d; margin: 8px 0 4px; }
+  details.step pre { background: #f0f2f5; color: #24292f; max-height: 260px;
+                     overflow: auto; }
+  #composer { position: fixed; left: 0; right: 0; bottom: 0;
+              background: #fff; border-top: 1px solid #e2e5e9;
+              padding: 10px 0; }
+  #composer .wrap { display: flex; gap: 8px; align-items: flex-end; }
+  textarea { flex: 1; resize: none; min-height: 52px; max-height: 140px;
+             border: 1px solid #c9ced4; border-radius: 8px; padding: 10px;
+             font: inherit; }
+  textarea:focus { outline: 2px solid #2f6feb33; border-color: #2f6feb; }
+  button { border: 0; border-radius: 8px; padding: 11px 16px; font: inherit;
+           font-weight: 650; cursor: pointer; }
+  #run { background: #2f6feb; color: #fff; min-width: 110px; }
+  #run:disabled { background: #9db7ee; cursor: wait; }
+  #newtask { background: #eef0f2; color: #1c2128; }
+  #hint { text-align: center; color: #6a737d; margin-top: 40px; }
+  .running { color: #6a737d; font-size: .88rem; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>TP Creator</h1>
+  <span>plain words in &rarr; validated FANUC TP program out</span>
+</div></header>
+
+<main class="wrap">
+  <div id="conversation"></div>
+  <p id="hint">Describe the program you need &mdash; e.g.
+     &ldquo;pick a part from the conveyor and put it on fixture A,
+     gently&rdquo; &mdash; then press Run Agent.</p>
+</main>
+
+<div id="composer"><div class="wrap">
+  <textarea id="prompt" placeholder="Describe the task, or answer my question&hellip; (Ctrl+Enter runs)"></textarea>
+  <button id="run">Run Agent</button>
+  <button id="newtask" title="Forget this conversation">New task</button>
+</div></div>
+
+<script>
+"use strict";
+const conversation = document.getElementById("conversation");
+const promptBox = document.getElementById("prompt");
+const runBtn = document.getElementById("run");
+const hint = document.getElementById("hint");
+let turns = [];          // committed transcript: {role, text}
+let busy = false;
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function card(kind, who) {
+  const c = el("div", "card " + kind + "-card");
+  c.appendChild(el("div", "who", who));
+  conversation.appendChild(c);
+  hint.style.display = "none";
+  return c;
+}
+
+function scrollDown() { window.scrollTo(0, document.body.scrollHeight); }
+
+function stepsBlock(steps) {
+  const outer = document.createElement("details");
+  outer.className = "steps";
+  outer.appendChild(el("summary", "", "Steps trace (" + steps.length +
+    " model call" + (steps.length === 1 ? "" : "s") + ")"));
+  steps.forEach(function (s, i) {
+    const d = document.createElement("details");
+    d.className = "step";
+    d.appendChild(el("summary", "", (i + 1) + ". " + s.module));
+    d.appendChild(el("h4", "", "prompt"));
+    const p = el("pre", "", JSON.stringify(s.prompt, null, 2));
+    d.appendChild(p);
+    d.appendChild(el("h4", "", "response"));
+    d.appendChild(el("pre", "", JSON.stringify(s.response, null, 2)));
+    outer.appendChild(d);
+  });
+  return outer;
+}
+
+function showAssistant(responseText, steps) {
+  const c = card("assistant", "TP Creator");
+  const marker = "\n--- report ---\n";
+  const cut = responseText.indexOf(marker);
+  if (cut >= 0) {
+    c.appendChild(el("div", "report",
+                     responseText.slice(cut + marker.length)));
+    c.appendChild(el("pre", "", responseText.slice(0, cut).trim()));
+  } else {
+    c.appendChild(el("div", "msg", responseText));
+  }
+  if (steps && steps.length) c.appendChild(stepsBlock(steps));
+  scrollDown();
+}
+
+function showError(message, steps) {
+  const c = card("error", "Something went wrong");
+  c.appendChild(el("div", "msg", message));
+  if (steps && steps.length) c.appendChild(stepsBlock(steps));
+  scrollDown();
+}
+
+function transcriptWith(text) {
+  if (!turns.length) return text;
+  return turns.map(function (t) { return t.role + ": " + t.text; })
+              .join("\n") + "\nuser: " + text;
+}
+
+async function run() {
+  const text = promptBox.value.trim();
+  if (!text || busy) return;
+  busy = true;
+  runBtn.disabled = true;
+  promptBox.value = "";
+  card("user", "You").appendChild(el("div", "msg", text));
+  const status = card("assistant", "TP Creator");
+  const line = el("div", "running", "Running the agent… 0s");
+  status.appendChild(line);
+  scrollDown();
+  const t0 = Date.now();
+  const tick = setInterval(function () {
+    line.textContent = "Running the agent… " +
+      Math.round((Date.now() - t0) / 1000) + "s";
+  }, 1000);
+  try {
+    const r = await fetch("/api/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: transcriptWith(text) })
+    });
+    const data = await r.json();
+    status.remove();
+    if (data.status === "ok" && data.response !== null) {
+      turns.push({ role: "user", text: text });
+      turns.push({ role: "assistant", text: data.response });
+      showAssistant(data.response, data.steps || []);
+    } else {
+      showError(data.error || "The agent returned an unexpected reply.",
+                data.steps || []);
+    }
+  } catch (err) {
+    status.remove();
+    showError("The server could not be reached. Please try again.", []);
+  } finally {
+    clearInterval(tick);
+    busy = false;
+    runBtn.disabled = false;
+    promptBox.focus();
+  }
+}
+
+runBtn.addEventListener("click", run);
+promptBox.addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+});
+document.getElementById("newtask").addEventListener("click", function () {
+  turns = [];
+  conversation.textContent = "";
+  hint.style.display = "";
+  promptBox.value = "";
+  promptBox.focus();
+});
+promptBox.focus();
+</script>
+</body>
+</html>

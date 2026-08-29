@@ -33,11 +33,19 @@ fixture A" or "make it faster".
    when a table is loaded. With NO table (empty robot), allocate indexes
    sequentially from 1 unless the user names them.
 
+A register that EXISTS but is uninitialized (not yet taught) MAY be used
+when the user explicitly chose it - the program just carries a "teach it
+before running" advisory. Don't re-ask once the user has decided.
+
 ## Parameter checklist per task
 
 pick/place: pick position, place position, approach clearances, travel speed,
-contact speed, gripper output + settle time, home. Ambiguous target notes
-(two fixtures match) -> ask_user, naming both options with their indexes.
+contact speed, gripper output + settle time, home.
+
+AMBIGUITY RULE (hard): if the user's place words match MORE THAN ONE table
+note (e.g. "the fixture" matches both 'fixture A place' and 'fixture B
+place'), you MUST ask_user naming every option with its index. Never
+silently pick one - a wrong fixture crashes real hardware.
 
 ## Output protocol (STRICT)
 

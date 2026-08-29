@@ -191,8 +191,9 @@ class TestVerifierRegressions:
         verdict = run(make_prog(
             "L PR[10] 100mm/sec FINE",
             "L PR[10:conveyor approach] 50mm/sec FINE"), table, LIMITS)
-        [err] = verdict.errors
-        assert err.line == 1 and err.suggestion == "PR[6]"
+        assert verdict.errors == []
+        [warning] = verdict.warnings
+        assert "PR[6]" in warning
 
 
 class TestExistence:
@@ -204,13 +205,20 @@ class TestExistence:
         assert err.known["5"] == "conveyor pick"
         assert "10" not in err.known        # uninitialized rows aren't offered
 
-    def test_exists_uninitialized_with_did_you_mean(self, table):
+    def test_exists_uninitialized_is_warning_with_did_you_mean(self, table):
+        # owner decision: untaught-but-existing refs warn, never block
         verdict = run(make_prog(
             "L PR[10:conveyor approach] 100mm/sec FINE"), table, LIMITS)
-        [err] = verdict.errors
-        assert err.layer == "existence" and err.ref == "PR[10]"
-        assert "uninitialized" in err.message
-        assert err.suggestion == "PR[6]"
+        assert verdict.verdict == "pass" and verdict.errors == []
+        [warning] = verdict.warnings
+        assert "PR[10]" in warning and "PR[6]" in warning
+        assert "teach it" in warning
+
+    def test_uninitialized_without_label_plain_warning(self, table):
+        verdict = run(make_prog("L PR[10] 100mm/sec FINE"), table, LIMITS)
+        assert verdict.errors == []
+        [warning] = verdict.warnings
+        assert "not yet taught" in warning and "PR[6]" not in warning
 
     def test_duplicate_refs_reported_once_first_line(self, table):
         verdict = run(make_prog("L PR[99] 100mm/sec FINE",
@@ -275,18 +283,14 @@ class TestV1Fixture:
         text = (FIXTURES / "v1.ls").read_text(encoding="utf-8")
         verdict = run(text, table, LIMITS)
         assert verdict.verdict == "fail"
-        assert len(verdict.errors) == 2
 
-        wait_err, pr_err = verdict.errors
+        [wait_err] = verdict.errors
         assert wait_err.layer == "grammar" and wait_err.line == 8
         assert wait_err.found == "1.0sec"
         assert wait_err.suggestion == "WAIT 1.00(sec)"
 
-        assert pr_err.layer == "existence" and pr_err.line == 5
-        assert pr_err.ref == "PR[10]"
-        assert "uninitialized" in pr_err.message
-        assert pr_err.suggestion == "PR[6]"
-        assert pr_err.known["6"] == "conveyor approach"
+        [pr_warning] = verdict.warnings   # PR[10] untaught -> advisory
+        assert "PR[10]" in pr_warning and "PR[6]" in pr_warning
 
         assert verdict.stats == {"mn_lines": 14, "parsed_ok": 13,
                                  "limits_ok": True}

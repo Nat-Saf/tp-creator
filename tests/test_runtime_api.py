@@ -155,6 +155,14 @@ class TestApiExecute:
         assert set(body) == {"status", "error", "response", "steps"}
         assert body["status"] == "error" and body["response"] is None
 
+    def test_root_serves_gui(self, env):
+        r = TestClient(app).get("/")
+        assert r.status_code == 200
+        assert "text/html" in r.headers["content-type"]
+        for marker in ("Run Agent", "New task", "textarea",
+                       "/api/execute", "Steps trace"):
+            assert marker in r.text, marker
+
     def test_transcript_prompt_passes_through(self, env):
         transcript = ("user: put it on the fixture\n"
                       "assistant: Which fixture - A or B?\n"

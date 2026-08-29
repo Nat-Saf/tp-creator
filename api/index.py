@@ -7,11 +7,13 @@ Local run:
     .venv\\Scripts\\python.exe -m uvicorn api.index:app --reload --port 8000
 """
 
+import json
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from tpagent import config, runtime
@@ -43,18 +45,9 @@ TEAM_INFO = {
     ],
 }
 
-INDEX_HTML = """<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TP Creator</title>
-</head>
-<body>
-  <h1>TP Creator - coming online</h1>
-</body>
-</html>
-"""
+from pathlib import Path
+
+INDEX_HTML = (Path(__file__).parent / "gui.html").read_text(encoding="utf-8")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -70,6 +63,43 @@ def team_info() -> dict:
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/api/model_architecture")
+def model_architecture() -> Response:
+    png = config.ROOT / "docs" / "architecture.png"
+    return Response(content=png.read_bytes(), media_type="image/png")
+
+
+@app.get("/api/agent_info")
+def agent_info() -> dict:
+    examples = json.loads(
+        (Path(__file__).parent / "agent_info_examples.json")
+        .read_text(encoding="utf-8"))
+    return {
+        "description":
+            "TP Creator turns a plain-language task description into a "
+            "validated FANUC TP (.LS) program for a known robot cell. A "
+            "planner model maps your words to the cell's registers and IO "
+            "through their pendant notes, a code model writes the program, "
+            "and a deterministic three-layer validator (grammar, register "
+            "existence, safety limits) checks every draft before delivery; "
+            "a mandatory audit adds human-review advisories, and every "
+            "model call is traced in the steps array.",
+        "purpose":
+            "Let a robotics engineer get a runnable, cell-aware "
+            "pick-and-place style TP program - with safety advisories and "
+            "a full reasoning trace - from one sentence, instead of "
+            "hand-writing boilerplate on the teach pendant.",
+        "prompt_template": {
+            "template":
+                "pick a part from <place> and put it on <place>, <style> - "
+                "name places by their pendant-note words (e.g. 'conveyor "
+                "pick', 'fixture A'); answer follow-up questions as plain "
+                "text; send the whole conversation transcript as the "
+                "prompt on follow-ups."},
+        "prompt_examples": examples,
+    }
 
 
 class ExecuteBody(BaseModel):

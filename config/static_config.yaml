@@ -16,7 +16,9 @@ llm:
   max_tokens:               # per-role caps (course budget rules)
     llm1: 800
     llm2: 3000              # a full program + headers; 1600 truncated live
-  reasoning_effort: minimal # gpt-5 family only; caps hidden reasoning spend
+  reasoning_effort:         # gpt-5 family only; caps hidden reasoning spend
+    llm1: low               # planning/policy adherence needs some thought
+    llm2: minimal           # codegen follows the rendered prompt
 table:
   max_table_age_hours: 72   # cache freshness bound (DESIGN.md 2c)
 # No default_index_map (owner decision, 2026-08-29): without a scan/cache the

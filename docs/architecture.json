@@ -1,0 +1,13 @@
+{
+  "boxes": [
+    "Runtime",
+    "LLM1-Intake",
+    "LLM1-Audit",
+    "Renderer",
+    "LLM2-Codegen",
+    "Validator",
+    "RAG-Embed",
+    "RAG-Retrieve",
+    "Stores"
+  ]
+}
