@@ -1,0 +1,2749 @@
+{
+  "$defs": {
+    "AbortInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "abort",
+          "default": "abort",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "AbortInstr",
+      "type": "object"
+    },
+    "ArgRef": {
+      "additionalProperties": false,
+      "description": "AR[i] -- argument passed via CALL prog(a1, a2, ...).",
+      "properties": {
+        "index": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "ArgRef",
+      "type": "object"
+    },
+    "ArithTerm": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "+",
+            "-",
+            "*",
+            "/",
+            "DIV",
+            "MOD"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "operand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Constant"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            },
+            {
+              "$ref": "#/$defs/PosRegRef"
+            },
+            {
+              "$ref": "#/$defs/StrRegRef"
+            },
+            {
+              "$ref": "#/$defs/ArgRef"
+            },
+            {
+              "$ref": "#/$defs/IORef"
+            },
+            {
+              "$ref": "#/$defs/PalletRegRef"
+            }
+          ],
+          "title": "Operand"
+        }
+      },
+      "required": [
+        "op",
+        "operand"
+      ],
+      "title": "ArithTerm",
+      "type": "object"
+    },
+    "CallInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "call",
+          "default": "call",
+          "title": "Type",
+          "type": "string"
+        },
+        "program": {
+          "pattern": "^[A-Z_][A-Z0-9_]{0,35}$",
+          "title": "Program",
+          "type": "string"
+        },
+        "args": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Constant"
+              },
+              {
+                "$ref": "#/$defs/RegRef"
+              },
+              {
+                "$ref": "#/$defs/StrRegRef"
+              }
+            ]
+          },
+          "maxItems": 10,
+          "title": "Args",
+          "type": "array"
+        }
+      },
+      "required": [
+        "program"
+      ],
+      "title": "CallInstr",
+      "type": "object"
+    },
+    "CollisionDetectInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "col_detect",
+          "default": "col_detect",
+          "title": "Type",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "ON",
+            "OFF"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "CollisionDetectInstr",
+      "type": "object"
+    },
+    "CollisionGuardAdjustInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "col_guard_adjust",
+          "default": "col_guard_adjust",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "CollisionGuardAdjustInstr",
+      "type": "object"
+    },
+    "CommentInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "comment",
+          "default": "comment",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 32,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "CommentInstr",
+      "type": "object"
+    },
+    "Comparison": {
+      "additionalProperties": false,
+      "description": "R[1] > 5, AI[2] <= R[3], DI[7] = ON ... (Ch.7.5, 7.6).",
+      "properties": {
+        "lhs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Constant"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            },
+            {
+              "$ref": "#/$defs/PosRegRef"
+            },
+            {
+              "$ref": "#/$defs/StrRegRef"
+            },
+            {
+              "$ref": "#/$defs/ArgRef"
+            },
+            {
+              "$ref": "#/$defs/IORef"
+            },
+            {
+              "$ref": "#/$defs/PalletRegRef"
+            }
+          ],
+          "title": "Lhs"
+        },
+        "op": {
+          "enum": [
+            "=",
+            "<>",
+            "<",
+            ">",
+            "<=",
+            ">="
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "rhs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Constant"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            },
+            {
+              "$ref": "#/$defs/PosRegRef"
+            },
+            {
+              "$ref": "#/$defs/StrRegRef"
+            },
+            {
+              "$ref": "#/$defs/ArgRef"
+            },
+            {
+              "$ref": "#/$defs/IORef"
+            },
+            {
+              "$ref": "#/$defs/PalletRegRef"
+            },
+            {
+              "enum": [
+                "ON",
+                "OFF"
+              ],
+              "type": "string"
+            }
+          ],
+          "title": "Rhs"
+        }
+      },
+      "required": [
+        "lhs",
+        "op",
+        "rhs"
+      ],
+      "title": "Comparison",
+      "type": "object"
+    },
+    "ConditionGroup": {
+      "additionalProperties": false,
+      "description": "Multiple comparisons joined by AND *or* OR -- TP forbids mixing both\nin one instruction (Ch.7.5.1).",
+      "properties": {
+        "logic": {
+          "enum": [
+            "AND",
+            "OR"
+          ],
+          "title": "Logic",
+          "type": "string"
+        },
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/Comparison"
+          },
+          "maxItems": 5,
+          "minItems": 2,
+          "title": "Terms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "logic",
+        "terms"
+      ],
+      "title": "ConditionGroup",
+      "type": "object"
+    },
+    "Constant": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "Constant",
+      "type": "object"
+    },
+    "ElseInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "else",
+          "default": "else",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ElseInstr",
+      "type": "object"
+    },
+    "EmptyInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "empty",
+          "default": "empty",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "EmptyInstr",
+      "type": "object"
+    },
+    "EndForInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "endfor",
+          "default": "endfor",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "EndForInstr",
+      "type": "object"
+    },
+    "EndIfInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "endif",
+          "default": "endif",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "EndIfInstr",
+      "type": "object"
+    },
+    "ForInstr": {
+      "additionalProperties": false,
+      "description": "FOR R[1]=1 TO 10 / FOR R[1]=10 DOWNTO 1.",
+      "properties": {
+        "type": {
+          "const": "for",
+          "default": "for",
+          "title": "Type",
+          "type": "string"
+        },
+        "counter": {
+          "$ref": "#/$defs/RegRef"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Constant"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            }
+          ],
+          "title": "Start"
+        },
+        "direction": {
+          "enum": [
+            "TO",
+            "DOWNTO"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Constant"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            }
+          ],
+          "title": "End"
+        }
+      },
+      "required": [
+        "counter",
+        "start",
+        "direction",
+        "end"
+      ],
+      "title": "ForInstr",
+      "type": "object"
+    },
+    "IOAssignInstr": {
+      "additionalProperties": false,
+      "description": "DO[1]=ON ; RO[2]=OFF ; DO[3]=R[1] ; GO[1]=R[2] ; AO[1]=4.5 ;\nF[1]=(ON) flags.",
+      "properties": {
+        "type": {
+          "const": "io_assign",
+          "default": "io_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/IORef"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "ON",
+                "OFF"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueExpr"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "target",
+        "value"
+      ],
+      "title": "IOAssignInstr",
+      "type": "object"
+    },
+    "IOPulseInstr": {
+      "additionalProperties": false,
+      "description": "DO[1]=PULSE ; DO[1]=PULSE,2.0sec.",
+      "properties": {
+        "type": {
+          "const": "io_pulse",
+          "default": "io_pulse",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/IORef"
+        },
+        "width_sec": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 25.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width Sec"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "title": "IOPulseInstr",
+      "type": "object"
+    },
+    "IORef": {
+      "additionalProperties": false,
+      "properties": {
+        "io_type": {
+          "enum": [
+            "DI",
+            "DO",
+            "RI",
+            "RO",
+            "UI",
+            "UO",
+            "SI",
+            "SO",
+            "GI",
+            "GO",
+            "AI",
+            "AO",
+            "F",
+            "M"
+          ],
+          "title": "Io Type",
+          "type": "string"
+        },
+        "index": {
+          "maximum": 512,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        }
+      },
+      "required": [
+        "io_type",
+        "index"
+      ],
+      "title": "IORef",
+      "type": "object"
+    },
+    "IfInstr": {
+      "additionalProperties": false,
+      "description": "IF R[1]>5, JMP LBL[10] ; IF DI[2]=ON, CALL OPEN_GRIP.",
+      "properties": {
+        "type": {
+          "const": "if",
+          "default": "if",
+          "title": "Type",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Comparison"
+            },
+            {
+              "$ref": "#/$defs/ConditionGroup"
+            }
+          ],
+          "title": "Condition"
+        },
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JumpInstr"
+            },
+            {
+              "$ref": "#/$defs/CallInstr"
+            },
+            {
+              "$ref": "#/$defs/IOAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/RegisterAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/IOPulseInstr"
+            }
+          ],
+          "title": "Action"
+        }
+      },
+      "required": [
+        "condition",
+        "action"
+      ],
+      "title": "IfInstr",
+      "type": "object"
+    },
+    "IfThenInstr": {
+      "additionalProperties": false,
+      "description": "IF (R[1]>=3 AND DI[1]=ON) THEN  -- mixed-logic block form.",
+      "properties": {
+        "type": {
+          "const": "if_then",
+          "default": "if_then",
+          "title": "Type",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Comparison"
+            },
+            {
+              "$ref": "#/$defs/ConditionGroup"
+            }
+          ],
+          "title": "Condition"
+        }
+      },
+      "required": [
+        "condition"
+      ],
+      "title": "IfThenInstr",
+      "type": "object"
+    },
+    "JumpInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "jump",
+          "default": "jump",
+          "title": "Type",
+          "type": "string"
+        },
+        "label": {
+          "maximum": 32767,
+          "minimum": 1,
+          "title": "Label",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "JumpInstr",
+      "type": "object"
+    },
+    "LabelInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "label",
+          "default": "label",
+          "title": "Type",
+          "type": "string"
+        },
+        "label": {
+          "maximum": 32767,
+          "minimum": 1,
+          "title": "Label",
+          "type": "integer"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "LabelInstr",
+      "type": "object"
+    },
+    "Line": {
+      "additionalProperties": false,
+      "description": "One numbered /MN line.",
+      "properties": {
+        "instr": {
+          "discriminator": {
+            "mapping": {
+              "abort": "#/$defs/AbortInstr",
+              "call": "#/$defs/CallInstr",
+              "col_detect": "#/$defs/CollisionDetectInstr",
+              "col_guard_adjust": "#/$defs/CollisionGuardAdjustInstr",
+              "comment": "#/$defs/CommentInstr",
+              "else": "#/$defs/ElseInstr",
+              "empty": "#/$defs/EmptyInstr",
+              "endfor": "#/$defs/EndForInstr",
+              "endif": "#/$defs/EndIfInstr",
+              "for": "#/$defs/ForInstr",
+              "if": "#/$defs/IfInstr",
+              "if_then": "#/$defs/IfThenInstr",
+              "io_assign": "#/$defs/IOAssignInstr",
+              "io_pulse": "#/$defs/IOPulseInstr",
+              "jump": "#/$defs/JumpInstr",
+              "label": "#/$defs/LabelInstr",
+              "lock_preg": "#/$defs/LockPregInstr",
+              "message": "#/$defs/MessageInstr",
+              "monitor": "#/$defs/MonitorInstr",
+              "monitor_end": "#/$defs/MonitorEndInstr",
+              "motion": "#/$defs/MotionInstr",
+              "offset_condition": "#/$defs/OffsetConditionInstr",
+              "override": "#/$defs/OverrideInstr",
+              "palletizing": "#/$defs/PalletizingInstr",
+              "palletizing_end": "#/$defs/PalletizingEndInstr",
+              "palletizing_motion": "#/$defs/PalletizingMotionInstr",
+              "palletreg_assign": "#/$defs/PalletRegAssignInstr",
+              "pause": "#/$defs/PauseInstr",
+              "payload": "#/$defs/PayloadInstr",
+              "posreg_assign": "#/$defs/PosRegAssignInstr",
+              "posreg_elem_assign": "#/$defs/PosRegElemAssignInstr",
+              "register_assign": "#/$defs/RegisterAssignInstr",
+              "remark": "#/$defs/RemarkInstr",
+              "rsr": "#/$defs/RsrInstr",
+              "run": "#/$defs/RunInstr",
+              "select": "#/$defs/SelectInstr",
+              "skip_condition": "#/$defs/SkipConditionInstr",
+              "strreg_assign": "#/$defs/StrRegAssignInstr",
+              "timer": "#/$defs/TimerInstr",
+              "tool_offset_condition": "#/$defs/ToolOffsetConditionInstr",
+              "uframe_assign": "#/$defs/UFrameAssignInstr",
+              "uframe_num": "#/$defs/UFrameNumInstr",
+              "unlock_preg": "#/$defs/UnlockPregInstr",
+              "user_alarm": "#/$defs/UserAlarmInstr",
+              "utool_assign": "#/$defs/UToolAssignInstr",
+              "utool_num": "#/$defs/UToolNumInstr",
+              "wait_cond": "#/$defs/WaitCondInstr",
+              "wait_time": "#/$defs/WaitTimeInstr"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/MotionInstr"
+            },
+            {
+              "$ref": "#/$defs/RegisterAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/PosRegAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/PosRegElemAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/StrRegAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/PalletRegAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/IOAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/IOPulseInstr"
+            },
+            {
+              "$ref": "#/$defs/LabelInstr"
+            },
+            {
+              "$ref": "#/$defs/JumpInstr"
+            },
+            {
+              "$ref": "#/$defs/CallInstr"
+            },
+            {
+              "$ref": "#/$defs/RunInstr"
+            },
+            {
+              "$ref": "#/$defs/IfInstr"
+            },
+            {
+              "$ref": "#/$defs/IfThenInstr"
+            },
+            {
+              "$ref": "#/$defs/ElseInstr"
+            },
+            {
+              "$ref": "#/$defs/EndIfInstr"
+            },
+            {
+              "$ref": "#/$defs/SelectInstr"
+            },
+            {
+              "$ref": "#/$defs/ForInstr"
+            },
+            {
+              "$ref": "#/$defs/EndForInstr"
+            },
+            {
+              "$ref": "#/$defs/WaitTimeInstr"
+            },
+            {
+              "$ref": "#/$defs/WaitCondInstr"
+            },
+            {
+              "$ref": "#/$defs/SkipConditionInstr"
+            },
+            {
+              "$ref": "#/$defs/UFrameNumInstr"
+            },
+            {
+              "$ref": "#/$defs/UToolNumInstr"
+            },
+            {
+              "$ref": "#/$defs/UFrameAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/UToolAssignInstr"
+            },
+            {
+              "$ref": "#/$defs/OffsetConditionInstr"
+            },
+            {
+              "$ref": "#/$defs/ToolOffsetConditionInstr"
+            },
+            {
+              "$ref": "#/$defs/PayloadInstr"
+            },
+            {
+              "$ref": "#/$defs/PalletizingInstr"
+            },
+            {
+              "$ref": "#/$defs/PalletizingMotionInstr"
+            },
+            {
+              "$ref": "#/$defs/PalletizingEndInstr"
+            },
+            {
+              "$ref": "#/$defs/AbortInstr"
+            },
+            {
+              "$ref": "#/$defs/PauseInstr"
+            },
+            {
+              "$ref": "#/$defs/OverrideInstr"
+            },
+            {
+              "$ref": "#/$defs/TimerInstr"
+            },
+            {
+              "$ref": "#/$defs/MessageInstr"
+            },
+            {
+              "$ref": "#/$defs/UserAlarmInstr"
+            },
+            {
+              "$ref": "#/$defs/RsrInstr"
+            },
+            {
+              "$ref": "#/$defs/CollisionDetectInstr"
+            },
+            {
+              "$ref": "#/$defs/CollisionGuardAdjustInstr"
+            },
+            {
+              "$ref": "#/$defs/MonitorInstr"
+            },
+            {
+              "$ref": "#/$defs/MonitorEndInstr"
+            },
+            {
+              "$ref": "#/$defs/LockPregInstr"
+            },
+            {
+              "$ref": "#/$defs/UnlockPregInstr"
+            },
+            {
+              "$ref": "#/$defs/CommentInstr"
+            },
+            {
+              "$ref": "#/$defs/RemarkInstr"
+            },
+            {
+              "$ref": "#/$defs/EmptyInstr"
+            }
+          ],
+          "title": "Instr"
+        }
+      },
+      "required": [
+        "instr"
+      ],
+      "title": "Line",
+      "type": "object"
+    },
+    "LockPregInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "lock_preg",
+          "default": "lock_preg",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "LockPregInstr",
+      "type": "object"
+    },
+    "MessageInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "message",
+          "default": "message",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 24,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "MessageInstr",
+      "type": "object"
+    },
+    "MonitorEndInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "monitor_end",
+          "default": "monitor_end",
+          "title": "Type",
+          "type": "string"
+        },
+        "program": {
+          "title": "Program",
+          "type": "string"
+        }
+      },
+      "required": [
+        "program"
+      ],
+      "title": "MonitorEndInstr",
+      "type": "object"
+    },
+    "MonitorInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "monitor",
+          "default": "monitor",
+          "title": "Type",
+          "type": "string"
+        },
+        "program": {
+          "title": "Program",
+          "type": "string"
+        }
+      },
+      "required": [
+        "program"
+      ],
+      "title": "MonitorInstr",
+      "type": "object"
+    },
+    "MotionInstr": {
+      "additionalProperties": false,
+      "description": "J P[1] 100% FINE ; L PR[5] 100mm/sec CNT50 Offset,PR[2] ;\nC P[2] P[3] 200mm/sec FINE ; A P[4] 150mm/sec FINE (4D graphics arc).",
+      "properties": {
+        "type": {
+          "const": "motion",
+          "default": "motion",
+          "title": "Type",
+          "type": "string"
+        },
+        "motion": {
+          "enum": [
+            "J",
+            "L",
+            "C",
+            "A"
+          ],
+          "title": "Motion",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/PosRef"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PosRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "speed": {
+          "$ref": "#/$defs/Speed"
+        },
+        "term": {
+          "$ref": "#/$defs/Termination"
+        },
+        "options": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "acc": "#/$defs/OptAcceleration",
+                "ap_ld": "#/$defs/OptApproachLD",
+                "break": "#/$defs/OptBreak",
+                "coord": "#/$defs/OptCoord",
+                "distance_before": "#/$defs/OptDistanceBefore",
+                "ev": "#/$defs/OptEV",
+                "inc": "#/$defs/OptIncremental",
+                "ind_ev": "#/$defs/OptIndEV",
+                "mrot": "#/$defs/OptMROT",
+                "offset_cond": "#/$defs/OptOffsetCond",
+                "offset_pr": "#/$defs/OptOffsetPR",
+                "pth": "#/$defs/OptPath",
+                "rt_ld": "#/$defs/OptRetractLD",
+                "skip": "#/$defs/OptSkip",
+                "time_after": "#/$defs/OptTimeAfter",
+                "time_before": "#/$defs/OptTimeBefore",
+                "tool_offset_cond": "#/$defs/OptToolOffsetCond",
+                "tool_offset_pr": "#/$defs/OptToolOffsetPR",
+                "wjnt": "#/$defs/OptWrist"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/OptWrist"
+              },
+              {
+                "$ref": "#/$defs/OptCoord"
+              },
+              {
+                "$ref": "#/$defs/OptAcceleration"
+              },
+              {
+                "$ref": "#/$defs/OptSkip"
+              },
+              {
+                "$ref": "#/$defs/OptBreak"
+              },
+              {
+                "$ref": "#/$defs/OptOffsetPR"
+              },
+              {
+                "$ref": "#/$defs/OptOffsetCond"
+              },
+              {
+                "$ref": "#/$defs/OptToolOffsetPR"
+              },
+              {
+                "$ref": "#/$defs/OptToolOffsetCond"
+              },
+              {
+                "$ref": "#/$defs/OptIncremental"
+              },
+              {
+                "$ref": "#/$defs/OptTimeBefore"
+              },
+              {
+                "$ref": "#/$defs/OptTimeAfter"
+              },
+              {
+                "$ref": "#/$defs/OptDistanceBefore"
+              },
+              {
+                "$ref": "#/$defs/OptPath"
+              },
+              {
+                "$ref": "#/$defs/OptApproachLD"
+              },
+              {
+                "$ref": "#/$defs/OptRetractLD"
+              },
+              {
+                "$ref": "#/$defs/OptEV"
+              },
+              {
+                "$ref": "#/$defs/OptIndEV"
+              },
+              {
+                "$ref": "#/$defs/OptMROT"
+              }
+            ]
+          },
+          "maxItems": 6,
+          "title": "Options",
+          "type": "array"
+        }
+      },
+      "required": [
+        "motion",
+        "target",
+        "speed",
+        "term"
+      ],
+      "title": "MotionInstr",
+      "type": "object"
+    },
+    "OffsetConditionInstr": {
+      "additionalProperties": false,
+      "description": "OFFSET CONDITION PR[n] (,UFRAME[m]).",
+      "properties": {
+        "type": {
+          "const": "offset_condition",
+          "default": "offset_condition",
+          "title": "Type",
+          "type": "string"
+        },
+        "pr": {
+          "$ref": "#/$defs/PosRegRef"
+        },
+        "uframe": {
+          "anyOf": [
+            {
+              "maximum": 9,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uframe"
+        }
+      },
+      "required": [
+        "pr"
+      ],
+      "title": "OffsetConditionInstr",
+      "type": "object"
+    },
+    "OptAcceleration": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "acc",
+          "default": "acc",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 150,
+          "minimum": 0,
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "OptAcceleration",
+      "type": "object"
+    },
+    "OptApproachLD": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ap_ld",
+          "default": "ap_ld",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "OptApproachLD",
+      "type": "object"
+    },
+    "OptBreak": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "break",
+          "default": "break",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptBreak",
+      "type": "object"
+    },
+    "OptCoord": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "coord",
+          "default": "coord",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptCoord",
+      "type": "object"
+    },
+    "OptDistanceBefore": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "distance_before",
+          "default": "distance_before",
+          "title": "Type",
+          "type": "string"
+        },
+        "mm": {
+          "exclusiveMinimum": 0,
+          "title": "Mm",
+          "type": "number"
+        },
+        "action_call": {
+          "title": "Action Call",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mm",
+        "action_call"
+      ],
+      "title": "OptDistanceBefore",
+      "type": "object"
+    },
+    "OptEV": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ev",
+          "default": "ev",
+          "title": "Type",
+          "type": "string"
+        },
+        "percent": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Percent",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "percent"
+      ],
+      "title": "OptEV",
+      "type": "object"
+    },
+    "OptIncremental": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "inc",
+          "default": "inc",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptIncremental",
+      "type": "object"
+    },
+    "OptIndEV": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ind_ev",
+          "default": "ind_ev",
+          "title": "Type",
+          "type": "string"
+        },
+        "percent": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Percent",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "percent"
+      ],
+      "title": "OptIndEV",
+      "type": "object"
+    },
+    "OptMROT": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "mrot",
+          "default": "mrot",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptMROT",
+      "type": "object"
+    },
+    "OptOffsetCond": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "offset_cond",
+          "default": "offset_cond",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptOffsetCond",
+      "type": "object"
+    },
+    "OptOffsetPR": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "offset_pr",
+          "default": "offset_pr",
+          "title": "Type",
+          "type": "string"
+        },
+        "pr": {
+          "$ref": "#/$defs/PosRegRef"
+        }
+      },
+      "required": [
+        "pr"
+      ],
+      "title": "OptOffsetPR",
+      "type": "object"
+    },
+    "OptPath": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "pth",
+          "default": "pth",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptPath",
+      "type": "object"
+    },
+    "OptRetractLD": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "rt_ld",
+          "default": "rt_ld",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "OptRetractLD",
+      "type": "object"
+    },
+    "OptSkip": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "skip",
+          "default": "skip",
+          "title": "Type",
+          "type": "string"
+        },
+        "label": {
+          "maximum": 32767,
+          "minimum": 1,
+          "title": "Label",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "OptSkip",
+      "type": "object"
+    },
+    "OptTimeAfter": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "time_after",
+          "default": "time_after",
+          "title": "Type",
+          "type": "string"
+        },
+        "seconds": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Seconds",
+          "type": "number"
+        },
+        "action_call": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Call"
+        },
+        "action_io": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IOAssignInstr"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "title": "OptTimeAfter",
+      "type": "object"
+    },
+    "OptTimeBefore": {
+      "additionalProperties": false,
+      "description": "TB t sec, CALL prog / DO[n]=ON (Ch.7.2: TIME BEFORE).",
+      "properties": {
+        "type": {
+          "const": "time_before",
+          "default": "time_before",
+          "title": "Type",
+          "type": "string"
+        },
+        "seconds": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Seconds",
+          "type": "number"
+        },
+        "action_call": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Call"
+        },
+        "action_io": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IOAssignInstr"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "title": "OptTimeBefore",
+      "type": "object"
+    },
+    "OptToolOffsetCond": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "tool_offset_cond",
+          "default": "tool_offset_cond",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptToolOffsetCond",
+      "type": "object"
+    },
+    "OptToolOffsetPR": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "tool_offset_pr",
+          "default": "tool_offset_pr",
+          "title": "Type",
+          "type": "string"
+        },
+        "pr": {
+          "$ref": "#/$defs/PosRegRef"
+        }
+      },
+      "required": [
+        "pr"
+      ],
+      "title": "OptToolOffsetPR",
+      "type": "object"
+    },
+    "OptWrist": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wjnt",
+          "default": "wjnt",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "OptWrist",
+      "type": "object"
+    },
+    "OverrideInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "override",
+          "default": "override",
+          "title": "Type",
+          "type": "string"
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            }
+          ],
+          "title": "Percent"
+        }
+      },
+      "required": [
+        "percent"
+      ],
+      "title": "OverrideInstr",
+      "type": "object"
+    },
+    "PalletRegAssignInstr": {
+      "additionalProperties": false,
+      "description": "PL[1]=[1,1,1] ; PL[1]=PL[2].",
+      "properties": {
+        "type": {
+          "const": "palletreg_assign",
+          "default": "palletreg_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/PalletRegRef"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "$ref": "#/$defs/PalletRegRef"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "target",
+        "value"
+      ],
+      "title": "PalletRegAssignInstr",
+      "type": "object"
+    },
+    "PalletRegRef": {
+      "additionalProperties": false,
+      "description": "PL[i] pallet register (row, column, layer).",
+      "properties": {
+        "index": {
+          "maximum": 32,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "PalletRegRef",
+      "type": "object"
+    },
+    "PalletizingEndInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "palletizing_end",
+          "default": "palletizing_end",
+          "title": "Type",
+          "type": "string"
+        },
+        "number": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "title": "PalletizingEndInstr",
+      "type": "object"
+    },
+    "PalletizingInstr": {
+      "additionalProperties": false,
+      "description": "PALLETIZING-B_i / BX / E / EX header line.",
+      "properties": {
+        "type": {
+          "const": "palletizing",
+          "default": "palletizing",
+          "title": "Type",
+          "type": "string"
+        },
+        "variant": {
+          "enum": [
+            "B",
+            "BX",
+            "E",
+            "EX"
+          ],
+          "title": "Variant",
+          "type": "string"
+        },
+        "number": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "variant",
+        "number"
+      ],
+      "title": "PalletizingInstr",
+      "type": "object"
+    },
+    "PalletizingMotionInstr": {
+      "additionalProperties": false,
+      "description": "J PAL_i[A_1] 100% FINE -- approach/bottom/retract points.",
+      "properties": {
+        "type": {
+          "const": "palletizing_motion",
+          "default": "palletizing_motion",
+          "title": "Type",
+          "type": "string"
+        },
+        "motion": {
+          "enum": [
+            "J",
+            "L"
+          ],
+          "title": "Motion",
+          "type": "string"
+        },
+        "number": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "point": {
+          "enum": [
+            "A_2",
+            "A_1",
+            "BTM",
+            "R_1",
+            "R_2"
+          ],
+          "title": "Point",
+          "type": "string"
+        },
+        "speed": {
+          "$ref": "#/$defs/Speed"
+        },
+        "term": {
+          "$ref": "#/$defs/Termination"
+        }
+      },
+      "required": [
+        "motion",
+        "number",
+        "point",
+        "speed",
+        "term"
+      ],
+      "title": "PalletizingMotionInstr",
+      "type": "object"
+    },
+    "PauseInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "pause",
+          "default": "pause",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "PauseInstr",
+      "type": "object"
+    },
+    "PayloadInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "payload",
+          "default": "payload",
+          "title": "Type",
+          "type": "string"
+        },
+        "schedule": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Schedule",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schedule"
+      ],
+      "title": "PayloadInstr",
+      "type": "object"
+    },
+    "PosRef": {
+      "additionalProperties": false,
+      "description": "P[i] (program-local) or PR[i] (position register) motion target.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "P",
+            "PR"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "index": {
+          "maximum": 9999,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        }
+      },
+      "required": [
+        "kind",
+        "index"
+      ],
+      "title": "PosRef",
+      "type": "object"
+    },
+    "PosRegAssignInstr": {
+      "additionalProperties": false,
+      "description": "PR[1]=LPOS / JPOS / P[2] / PR[3] / UFRAME[1] / UTOOL[1].",
+      "properties": {
+        "type": {
+          "const": "posreg_assign",
+          "default": "posreg_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/PosRegRef"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "LPOS",
+                "JPOS"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/PosRef"
+            },
+            {
+              "$ref": "#/$defs/PosRegRef"
+            }
+          ],
+          "title": "Source"
+        },
+        "arith": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "enum": [
+                    "+",
+                    "-"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/PosRegRef"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arith"
+        }
+      },
+      "required": [
+        "target",
+        "source"
+      ],
+      "title": "PosRegAssignInstr",
+      "type": "object"
+    },
+    "PosRegElemAssignInstr": {
+      "additionalProperties": false,
+      "description": "PR[1,3]=R[2]+10 ; element arithmetic.",
+      "properties": {
+        "type": {
+          "const": "posreg_elem_assign",
+          "default": "posreg_elem_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/PosRegRef"
+        },
+        "value": {
+          "$ref": "#/$defs/ValueExpr"
+        }
+      },
+      "required": [
+        "target",
+        "value"
+      ],
+      "title": "PosRegElemAssignInstr",
+      "type": "object"
+    },
+    "PosRegRef": {
+      "additionalProperties": false,
+      "description": "PR[i] or element PR[i, j] (j: 1..6 axis / X Y Z W P R).",
+      "properties": {
+        "index": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "element": {
+          "anyOf": [
+            {
+              "maximum": 9,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Element"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "PosRegRef",
+      "type": "object"
+    },
+    "PositionRep": {
+      "additionalProperties": false,
+      "description": "A /POS entry for P[i]: Cartesian (config + xyzwpr) or Joint.",
+      "properties": {
+        "index": {
+          "maximum": 9999,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "rep": {
+          "enum": [
+            "C",
+            "J"
+          ],
+          "title": "Rep",
+          "type": "string"
+        },
+        "group": {
+          "default": 1,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Group",
+          "type": "integer"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config"
+        },
+        "values": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 9,
+          "minItems": 6,
+          "title": "Values",
+          "type": "array"
+        },
+        "uframe": {
+          "default": 1,
+          "maximum": 9,
+          "minimum": 0,
+          "title": "Uframe",
+          "type": "integer"
+        },
+        "utool": {
+          "default": 1,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Utool",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index",
+        "rep",
+        "values"
+      ],
+      "title": "PositionRep",
+      "type": "object"
+    },
+    "ProgramAttr": {
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "default": "MNEDITOR",
+          "title": "Owner",
+          "type": "string"
+        },
+        "comment": {
+          "default": "",
+          "maxLength": 32,
+          "title": "Comment",
+          "type": "string"
+        },
+        "prog_size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prog Size"
+        },
+        "group_mask": {
+          "default": "1,*,*,*,*",
+          "title": "Group Mask",
+          "type": "string"
+        }
+      },
+      "title": "ProgramAttr",
+      "type": "object"
+    },
+    "RegRef": {
+      "additionalProperties": false,
+      "description": "R[i] numeric register.",
+      "properties": {
+        "index": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "RegRef",
+      "type": "object"
+    },
+    "RegisterAssignInstr": {
+      "additionalProperties": false,
+      "description": "R[1]=R[2]+5 ; R[3]=DI[1] ; R[4]=TIMER[1] not modeled (v2).",
+      "properties": {
+        "type": {
+          "const": "register_assign",
+          "default": "register_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/RegRef"
+        },
+        "value": {
+          "$ref": "#/$defs/ValueExpr"
+        }
+      },
+      "required": [
+        "target",
+        "value"
+      ],
+      "title": "RegisterAssignInstr",
+      "type": "object"
+    },
+    "RemarkInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "remark",
+          "default": "remark",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 32,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "RemarkInstr",
+      "type": "object"
+    },
+    "RsrInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "rsr",
+          "default": "rsr",
+          "title": "Type",
+          "type": "string"
+        },
+        "rsr": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Rsr",
+          "type": "integer"
+        },
+        "state": {
+          "enum": [
+            "ENABLE",
+            "DISABLE"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rsr",
+        "state"
+      ],
+      "title": "RsrInstr",
+      "type": "object"
+    },
+    "RunInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "run",
+          "default": "run",
+          "title": "Type",
+          "type": "string"
+        },
+        "program": {
+          "pattern": "^[A-Z_][A-Z0-9_]{0,35}$",
+          "title": "Program",
+          "type": "string"
+        }
+      },
+      "required": [
+        "program"
+      ],
+      "title": "RunInstr",
+      "type": "object"
+    },
+    "SelectCase": {
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Constant"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            },
+            {
+              "const": "ELSE",
+              "type": "string"
+            }
+          ],
+          "title": "Match"
+        },
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JumpInstr"
+            },
+            {
+              "$ref": "#/$defs/CallInstr"
+            }
+          ],
+          "title": "Action"
+        }
+      },
+      "required": [
+        "match",
+        "action"
+      ],
+      "title": "SelectCase",
+      "type": "object"
+    },
+    "SelectInstr": {
+      "additionalProperties": false,
+      "description": "SELECT R[1]=1, CALL A  =2, CALL B  ELSE, JMP LBL[99].",
+      "properties": {
+        "type": {
+          "const": "select",
+          "default": "select",
+          "title": "Type",
+          "type": "string"
+        },
+        "reg": {
+          "$ref": "#/$defs/RegRef"
+        },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/SelectCase"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Cases",
+          "type": "array"
+        }
+      },
+      "required": [
+        "reg",
+        "cases"
+      ],
+      "title": "SelectInstr",
+      "type": "object"
+    },
+    "SkipConditionInstr": {
+      "additionalProperties": false,
+      "description": "SKIP CONDITION DI[1]=ON -- pairs with Skip,LBL[n] motion option.",
+      "properties": {
+        "type": {
+          "const": "skip_condition",
+          "default": "skip_condition",
+          "title": "Type",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Comparison"
+            },
+            {
+              "$ref": "#/$defs/ConditionGroup"
+            }
+          ],
+          "title": "Condition"
+        }
+      },
+      "required": [
+        "condition"
+      ],
+      "title": "SkipConditionInstr",
+      "type": "object"
+    },
+    "Speed": {
+      "additionalProperties": false,
+      "description": "Motion speed with unit. Legal units depend on motion type (validated\nin MotionInstr): J -> % | sec | msec ; L/C/A -> mm/sec, cm/min, inch/min,\ndeg/sec, sec, msec.",
+      "properties": {
+        "value": {
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "enum": [
+            "%",
+            "mm/sec",
+            "cm/min",
+            "inch/min",
+            "deg/sec",
+            "sec",
+            "msec"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "unit"
+      ],
+      "title": "Speed",
+      "type": "object"
+    },
+    "StrRegAssignInstr": {
+      "additionalProperties": false,
+      "description": "SR[1]='ABC' ; SR[1]=SR[2]+SR[3] (concat).",
+      "properties": {
+        "type": {
+          "const": "strreg_assign",
+          "default": "strreg_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/StrRegRef"
+        },
+        "parts": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Constant"
+              },
+              {
+                "$ref": "#/$defs/StrRegRef"
+              },
+              {
+                "$ref": "#/$defs/RegRef"
+              }
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Parts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "target",
+        "parts"
+      ],
+      "title": "StrRegAssignInstr",
+      "type": "object"
+    },
+    "StrRegRef": {
+      "additionalProperties": false,
+      "description": "SR[i] string register.",
+      "properties": {
+        "index": {
+          "maximum": 25,
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "StrRegRef",
+      "type": "object"
+    },
+    "Termination": {
+      "additionalProperties": false,
+      "description": "FINE or CNT0..CNT100 (CD0..CD100 on some options; not modeled v1).",
+      "properties": {
+        "kind": {
+          "enum": [
+            "FINE",
+            "CNT"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Termination",
+      "type": "object"
+    },
+    "TimerInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "timer",
+          "default": "timer",
+          "title": "Type",
+          "type": "string"
+        },
+        "timer": {
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Timer",
+          "type": "integer"
+        },
+        "action": {
+          "enum": [
+            "START",
+            "STOP",
+            "RESET"
+          ],
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "timer",
+        "action"
+      ],
+      "title": "TimerInstr",
+      "type": "object"
+    },
+    "ToolOffsetConditionInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "tool_offset_condition",
+          "default": "tool_offset_condition",
+          "title": "Type",
+          "type": "string"
+        },
+        "pr": {
+          "$ref": "#/$defs/PosRegRef"
+        },
+        "utool": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Utool"
+        }
+      },
+      "required": [
+        "pr"
+      ],
+      "title": "ToolOffsetConditionInstr",
+      "type": "object"
+    },
+    "UFrameAssignInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "uframe_assign",
+          "default": "uframe_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "frame": {
+          "maximum": 9,
+          "minimum": 1,
+          "title": "Frame",
+          "type": "integer"
+        },
+        "pr": {
+          "$ref": "#/$defs/PosRegRef"
+        }
+      },
+      "required": [
+        "frame",
+        "pr"
+      ],
+      "title": "UFrameAssignInstr",
+      "type": "object"
+    },
+    "UFrameNumInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "uframe_num",
+          "default": "uframe_num",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "UFrameNumInstr",
+      "type": "object"
+    },
+    "UToolAssignInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "utool_assign",
+          "default": "utool_assign",
+          "title": "Type",
+          "type": "string"
+        },
+        "tool": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Tool",
+          "type": "integer"
+        },
+        "pr": {
+          "$ref": "#/$defs/PosRegRef"
+        }
+      },
+      "required": [
+        "tool",
+        "pr"
+      ],
+      "title": "UToolAssignInstr",
+      "type": "object"
+    },
+    "UToolNumInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "utool_num",
+          "default": "utool_num",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "UToolNumInstr",
+      "type": "object"
+    },
+    "UnlockPregInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "unlock_preg",
+          "default": "unlock_preg",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "UnlockPregInstr",
+      "type": "object"
+    },
+    "UserAlarmInstr": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "user_alarm",
+          "default": "user_alarm",
+          "title": "Type",
+          "type": "string"
+        },
+        "alarm": {
+          "maximum": 99,
+          "minimum": 1,
+          "title": "Alarm",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "alarm"
+      ],
+      "title": "UserAlarmInstr",
+      "type": "object"
+    },
+    "ValueExpr": {
+      "additionalProperties": false,
+      "description": "first [op operand]* -- TP register arithmetic chain (Ch.7.3).\nTP evaluates left to right; a chain may not mix * / with + - freely on\nthe pendant, so renderers should parenthesize per manual rules.",
+      "properties": {
+        "first": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Constant"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            },
+            {
+              "$ref": "#/$defs/PosRegRef"
+            },
+            {
+              "$ref": "#/$defs/StrRegRef"
+            },
+            {
+              "$ref": "#/$defs/ArgRef"
+            },
+            {
+              "$ref": "#/$defs/IORef"
+            },
+            {
+              "$ref": "#/$defs/PalletRegRef"
+            }
+          ],
+          "title": "First"
+        },
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/ArithTerm"
+          },
+          "maxItems": 5,
+          "title": "Terms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "first"
+      ],
+      "title": "ValueExpr",
+      "type": "object"
+    },
+    "WaitCondInstr": {
+      "additionalProperties": false,
+      "description": "WAIT DI[3]=ON ; WAIT R[1]>=5 AND DI[2]=ON, TIMEOUT LBL[99].",
+      "properties": {
+        "type": {
+          "const": "wait_cond",
+          "default": "wait_cond",
+          "title": "Type",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Comparison"
+            },
+            {
+              "$ref": "#/$defs/ConditionGroup"
+            }
+          ],
+          "title": "Condition"
+        },
+        "timeout_label": {
+          "anyOf": [
+            {
+              "maximum": 32767,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Label"
+        }
+      },
+      "required": [
+        "condition"
+      ],
+      "title": "WaitCondInstr",
+      "type": "object"
+    },
+    "WaitTimeInstr": {
+      "additionalProperties": false,
+      "description": "WAIT 1.50(sec) ; WAIT R[1].",
+      "properties": {
+        "type": {
+          "const": "wait_time",
+          "default": "wait_time",
+          "title": "Type",
+          "type": "string"
+        },
+        "seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/RegRef"
+            }
+          ],
+          "title": "Seconds"
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "title": "WaitTimeInstr",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The full .ls file: /PROG name, /ATTR, /MN lines, /POS entries.",
+  "properties": {
+    "name": {
+      "pattern": "^[A-Z_][A-Z0-9_]{0,35}$",
+      "title": "Name",
+      "type": "string"
+    },
+    "attr": {
+      "$ref": "#/$defs/ProgramAttr"
+    },
+    "lines": {
+      "items": {
+        "$ref": "#/$defs/Line"
+      },
+      "minItems": 1,
+      "title": "Lines",
+      "type": "array"
+    },
+    "positions": {
+      "items": {
+        "$ref": "#/$defs/PositionRep"
+      },
+      "title": "Positions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "lines"
+  ],
+  "title": "Program",
+  "type": "object"
+}

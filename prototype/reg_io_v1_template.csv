@@ -1,0 +1,35 @@
+# schema: reg_io_v1
+# cell_id: line3_fanuc1
+# scanned_at: 2026-07-04T10:42:00
+# source: fanuc_web
+# notes: UTF-8, comma delimiter, double-quote quoting, header row required.
+# notes: '#' lines are metadata, stripped before CSV parsing.
+# notes: dump ALL indexes, including rows with empty comments.
+# notes: initialized is TRUE/FALSE for registers, '-' for IO.
+# notes: value is optional free text; unit v1 ignores it. PR values use 'C:' (Cartesian) or 'J:' (Joint) prefix.
+type,index,comment,initialized,value
+PR,1,home,TRUE,"J: 0.0,0.0,0.0,0.0,-90.0,0.0"
+PR,5,conveyor pick,TRUE,"C: 512.3,-104.7,88.0,180.0,0.0,45.0"
+PR,6,conveyor approach,TRUE,"C: 512.3,-104.7,188.0,180.0,0.0,45.0"
+PR,7,fixture A approach,TRUE,"C: 291.0,220.5,160.0,180.0,0.0,90.0"
+PR,8,fixture A place,TRUE,"C: 291.0,220.5,95.0,180.0,0.0,90.0"
+PR,9,fixture B place,TRUE,"C: 291.0,-220.5,95.0,180.0,0.0,-90.0"
+PR,10,,FALSE,
+R,1,cycle count,TRUE,1042
+R,3,part counter,TRUE,12
+R,4,,TRUE,0
+SR,1,barcode buffer,TRUE,ABC-1042
+SR,2,"recipe name, active",TRUE,PICKPLACE_A
+PL,1,pallet A pattern,TRUE,"[1,1,1]"
+DI,3,part present,-,ON
+DI,4,conveyor running,-,OFF
+DI,7,,-,OFF
+DO,7,green lamp,-,OFF
+RI,1,gripper closed feedback,-,OFF
+RO,1,gripper close,-,OFF
+RO,2,gripper open,-,ON
+UI,5,,-,ON
+UO,1,cmd enabled,-,ON
+GI,1,part type code,-,3
+AI,1,vacuum pressure,-,0.82
+F,12,cycle active flag,-,OFF

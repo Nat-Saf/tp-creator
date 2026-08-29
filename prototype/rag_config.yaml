@@ -1,0 +1,26 @@
+profiles:
+  online:
+    embedding:
+      provider: openai_compatible
+      model: text-embedding-3-small
+    vector_db:
+      provider: pinecone
+      index_name: fanuc-tp-online
+  local:
+    embedding:
+      provider: ollama
+      model: nomic-embed-text
+    vector_db:
+      provider: chroma
+      path: ./chroma
+      collection: fanuc_tp_local
+index:
+  source_dir: corpus/
+  chunk_strategy: logical
+  chunk_size_chars: 1800
+  chunk_overlap_chars: 200
+  record_embedding_model: true
+retrieve:
+  top_k: 5
+  score_threshold: 0.25
+  max_context_chars: 9000

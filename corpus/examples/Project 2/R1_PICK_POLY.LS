@@ -1,0 +1,104 @@
+/PROG R1_PICK_POLY
+/ATTR
+OWNER		= MNEDITOR;
+COMMENT		= "Pick Polygon. R[1]=slot(1-10) R[8]=tray(1=P1 2=P2)";
+PROG_SIZE	= 0;
+CREATE		= DATE 26-06-01  TIME 00:00:00;
+MODIFIED	= DATE 26-06-21  TIME 00:00:00;
+FILE_NAME	= ;
+VERSION		= 0;
+LINE_COUNT	= 0;
+MEMORY_SIZE	= 0;
+PROTECT		= READ_WRITE;
+TCD:  STACK_SIZE	= 0,
+      TASK_PRIORITY	= 50,
+      TIME_SLICE	= 0,
+      BUSY_LAMP_OFF	= 0,
+      ABORT_REQUEST	= 0,
+      PAUSE_REQUEST	= 0;
+DEFAULT_GROUP	= 1,*,*,*,*;
+CONTROL_CODE	= 00000000 00000000;
+/MN
+   1:  !--- PICK POLYGON --- ;
+   2:  !  Audit 2026-07-27: stale-part gate BEFORE energizing the vacuum (a ;
+   3:  !  residual held part would be slammed onto the occupied tray slot ;
+   4:  !  and would mask a failed pick); vacuum fault retry-on-resume. ;
+   5:  LBL[9]    ;
+   6:  IF DI[533]=OFF, JMP LBL[10]    ;
+   7:  CALL SET_STR('POLY PART HELD AT ENTRY',1)    ;
+   8:  CALL R1_TOWER(1,3)    ;
+   9:  PAUSE    ;
+  10:  CALL R1_TOWER(3,0)    ;
+  11:  JMP LBL[9]    ;
+  12:  LBL[10]    ;
+  13:  DO[536]=ON    ;
+  14:  DO[535]=ON    ;
+  15:   ;
+  16:  !  Select base tray position (slot 1, col 1) ;
+  17:  IF R[8]=2, JMP LBL[1]    ;
+  18:  PR[20]=PR[12]    ;
+  19:  JMP LBL[2]    ;
+  20:  LBL[1]    ;
+  21:  PR[20]=PR[13]    ;
+  22:  LBL[2]    ;
+  23:   ;
+  24:  !  Decode slot R[1] (1-10): row R[31], col R[30] ;
+  25:  !  TP division does NOT floor - derive row by range ;
+  26:  R[31]=0    ;
+  27:  IF R[1]<3, JMP LBL[5]    ;
+  28:  R[31]=1    ;
+  29:  IF R[1]<5, JMP LBL[5]    ;
+  30:  R[31]=2    ;
+  31:  IF R[1]<7, JMP LBL[5]    ;
+  32:  R[31]=3    ;
+  33:  IF R[1]<9, JMP LBL[5]    ;
+  34:  R[31]=4    ;
+  35:  LBL[5]    ;
+  36:  !  col = (R[1]-1) - 2*row  (exact integer) ;
+  37:  R[30]=R[1]-1    ;
+  38:  R[32]=R[31]*2    ;
+  39:  R[30]=R[30]-R[32]    ;
+  40:   ;
+  41:  !  Apply X offset: col * delta_X_poly ;
+  42:  R[32]=PR[20,1]    ;
+  43:  R[33]=R[30]*R[11]    ;
+  44:  R[32]=R[32]+R[33]    ;
+  45:  PR[20,1]=R[32]    ;
+  46:   ;
+  47:  !  Apply Y offset: row * delta_Y_poly ;
+  48:  R[32]=PR[20,2]    ;
+  49:  R[33]=R[31]*R[13]    ;
+  50:  R[32]=R[32]+R[33]    ;
+  51:  PR[20,2]=R[32]    ;
+  52:   ;
+  53:  !  Build approach: PR[21] = PR[20] with Z+80 ;
+  54:  PR[21]=PR[20]    ;
+  55:  R[32]=PR[20,3]    ;
+  56:  R[32]=R[32]+80    ;
+  57:  PR[21,3]=R[32]    ;
+  58:   ;
+  59:  !  Move and pick ;
+  60:  J PR[21] 80% CNT50    ;
+  61:  L PR[20] 150mm/sec FINE    ;
+  62:  WAIT .3(sec)    ;
+  63:   ;
+  64:  !  Grip check: wait for grip/vacuum DI[533]=ON (timeout 5 sec) ;
+  65:  LBL[8]    ;
+  66:  R[90]=0    ;
+  67:  LBL[6]    ;
+  68:  IF DI[533]=ON, JMP LBL[7]    ;
+  69:  WAIT .1(sec)    ;
+  70:  R[90]=R[90]+1    ;
+  71:  IF R[90]<50, JMP LBL[6]    ;
+  72:  !  Vacuum timeout - bad pick. Vacuum stays ON; operator clears, ;
+  73:  !  resume re-checks (LBL[8]) ;
+  74:  CALL SET_STR('POLY VACUUM TIMEOUT',1)    ;
+  75:  CALL R1_TOWER(1,3)    ;
+  76:  PAUSE    ;
+  77:  CALL R1_TOWER(3,0)    ;
+  78:  JMP LBL[8]    ;
+  79:  LBL[7]    ;
+  80:   ;
+  81:  !  Retract ;
+  82:  L PR[21] 200mm/sec FINE    ;
+/END

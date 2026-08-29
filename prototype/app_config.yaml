@@ -1,0 +1,29 @@
+# app_config.yaml -- caller/GUI configuration (OUTSIDE the TP creator unit).
+# Every value here fills a Request field mechanically; none requires reading the prompt.
+
+cell_id: line3_fanuc1
+
+# reg_io_v1 CSV relayed verbatim on the first request of a session.
+# Later the robot class will fetch this from the controller automatically.
+scan_path: reg_io_v1_template.csv
+
+# "online" (v1) | "local" -- passed through as Request.rag_backend
+rag_backend: online
+
+# How the GUI reaches the unit. v0: direct (in-process mock_unit.handle).
+# Later: http with base_url pointing at the real unit service. Contract unchanged.
+unit:
+  transport: direct        # direct | http
+  base_url: http://127.0.0.1:8731
+
+# Defaults the user may override from the Settings tab. Sent as
+# Request.config_overrides ONLY for values the user actually changed
+# (empty overrides = unit uses its own static defaults). Limits are not
+# listed here on purpose -- the unit rejects any attempt to override them.
+overridable_defaults:
+  speed: 100mm/sec
+  pick_speed: 50mm/sec
+  term: FINE
+  utool: 1
+  uframe: 1
+  gripper_settle_sec: 0.5
