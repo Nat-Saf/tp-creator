@@ -34,14 +34,12 @@ def _bad_body(_request, _exc) -> JSONResponse:
                  "task here\"}.",
         "response": None, "steps": []})
 
-# PLACEHOLDERS - fill real values before submission.
 # Schema is exact per docs/project.pdf (GET /api/team_info); batch is 1.
 TEAM_INFO = {
-    "group_batch_order_number": "1_<ORDER#>",
-    "team_name": "<TEAM_NAME>",
+    "group_batch_order_number": "1_8",
+    "team_name": "Group I",
     "students": [
-        {"name": "<STUDENT_1_NAME>", "email": "<STUDENT_1_EMAIL>"},
-        {"name": "<STUDENT_2_NAME>", "email": "<STUDENT_2_EMAIL>"},
+        {"name": "Natan Safanov", "email": "safanov.natan@gmail.com"},
     ],
 }
 
