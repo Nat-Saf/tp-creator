@@ -2,7 +2,8 @@ profiles:
   online:
     embedding:
       provider: openai_compatible
-      model: text-embedding-3-small
+      model: NBUECSE-text-embedding-3-small   # must equal EMBED_MODEL env
+      dimension: 1536
     vector_db:
       provider: pinecone
       index_name: fanuc-tp-online
@@ -15,7 +16,7 @@ profiles:
       path: ./chroma
       collection: fanuc_tp_local
 index:
-  source_dir: corpus/
+  source_dir: corpus/prepared
   chunk_strategy: logical
   chunk_size_chars: 1800
   chunk_overlap_chars: 200
