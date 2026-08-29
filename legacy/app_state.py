@@ -10,10 +10,10 @@ import copy
 
 import yaml
 
-from contract import Request, Response, OVERRIDABLE_DEFAULTS
+from tpagent.contract import Request, Response, OVERRIDABLE_DEFAULTS
 
 APP_CONFIG = Path(__file__).parent / "app_config.yaml"
-RAG_CONFIG = Path(__file__).parent / "rag_config.yaml"
+RAG_CONFIG = Path(__file__).resolve().parents[1] / "config" / "rag_config.yaml"
 
 
 def load_yaml(path: Path) -> dict:

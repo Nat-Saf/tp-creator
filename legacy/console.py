@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse, difflib, sys
 from pathlib import Path
 
-from contract import Request, Response
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # repo root, for tpagent
+
+from tpagent.contract import Request, Response
 import mock_unit
 
 

@@ -17,8 +17,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from contract import Request, Response, Report, validate_request
-from reg_io import parse_reg_io_csv, RegIOTable, SchemaError
+from tpagent.contract import Request, Response, Report, validate_request
+from tpagent.reg_io import parse_reg_io_csv, RegIOTable, SchemaError
 
 DEFAULTS = {"speed": "100mm/sec", "pick_speed": "50mm/sec", "term": "FINE",
             "utool": 1, "uframe": 1, "gripper_settle_sec": 0.5}

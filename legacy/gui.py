@@ -8,12 +8,16 @@ the user only ever types the prompt (and answers questions in the same box).
 """
 from __future__ import annotations
 import difflib
+import sys
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # repo root, for tpagent
 
 from app_state import (AppState, RAG_EDITABLE, load_rag_config,
                        set_rag_value, save_rag_config)
-from contract import Response
+from tpagent.contract import Response
 import mock_unit
 
 
