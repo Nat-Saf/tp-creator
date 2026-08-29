@@ -11,9 +11,7 @@ from tpagent.stores.seed import DEFAULT_CSV, seed, show_row
 CSV_PATH = FIXTURES / "reg_io_v1_template.csv"
 CSV = CSV_PATH.read_text(encoding="utf-8")
 
-CFG = {"table": {"max_table_age_hours": 72},
-       "default_index_map": {"PR": {1: "home"}, "IO": {"RO[1]": "gripper close"}}}
-CFG_NO_MAP = {"table": {"max_table_age_hours": 72}, "default_index_map": {}}
+CFG = {"table": {"max_table_age_hours": 72}}
 
 
 def hours_ago(h: float) -> str:
@@ -50,33 +48,29 @@ class TestMaterialize:
         _, source = table.materialize("cellX", None, client=mock, config=CFG)
         assert source == "cache(30m)"
 
-    def test_stale_cache_falls_to_default_map(self):
+    def test_stale_cache_means_empty_robot(self):
         mock = MockSupabase()
         table.cache_scan("cellX", CSV, scanned_at=hours_ago(100), client=mock)
         t, source = table.materialize("cellX", None, client=mock, config=CFG)
-        assert source == "default_map"
-        assert t.key_set() == {("PR", 1), ("RO", 1)}
-        ro = t.find("RO", 1)
-        assert ro.category == "IO" and ro.direction == "out"
-        assert t.find("PR", 1).comment == "home"
+        assert source == "none"
+        assert t.entries == [] and t.cell_id == "cellX"
 
     def test_unparseable_scanned_at_refuses_cache(self):
         mock = MockSupabase()
         table.cache_scan("cellX", CSV, scanned_at="not-a-date", client=mock)
         _, source = table.materialize("cellX", None, client=mock, config=CFG)
-        assert source == "default_map"
+        assert source == "none"
 
-    def test_no_source_raises_friendly_no_table_source(self):
-        with pytest.raises(table.NoTableSource) as ei:
-            table.materialize("empty_cell", None,
-                              client=MockSupabase(), config=CFG_NO_MAP)
-        assert "reg_io_v1" in str(ei.value)
+    def test_no_source_returns_empty_robot(self):
+        t, source = table.materialize("empty_cell", None,
+                                      client=MockSupabase(), config=CFG)
+        assert source == "none" and t.entries == []
 
     def test_scan_for_other_cell_does_not_leak(self):
         mock = MockSupabase()
         table.cache_scan("cellA", CSV, scanned_at=hours_ago(1), client=mock)
         _, source = table.materialize("cellB", None, client=mock, config=CFG)
-        assert source == "default_map"
+        assert source == "none"
 
 
 class TestSession:

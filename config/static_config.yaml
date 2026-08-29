@@ -19,8 +19,7 @@ llm:
   reasoning_effort: minimal # gpt-5 family only; caps hidden reasoning spend
 table:
   max_table_age_hours: 72   # cache freshness bound (DESIGN.md 2c)
-default_index_map:          # used ONLY when no scan and no cache
-  PR:
-    1: "home"
-  IO:
-    "RO[1]": "gripper close"
+# No default_index_map (owner decision, 2026-08-29): without a scan/cache the
+# robot is treated as EMPTY - any register/IO index is usable; the agent takes
+# indexes the user names, else allocates sequentially from the lowest. The
+# validator skips existence checks in that mode; grammar + limits still run.

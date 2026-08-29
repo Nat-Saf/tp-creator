@@ -24,14 +24,14 @@ Example:
 Manual: HandlingTool V9.40 sec 7.36
 
 ## WAIT condition TIMEOUT - bounded wait with branch
-Syntax: WAIT <condition>, TIMEOUT LBL[i] ;
+Syntax: WAIT <condition> TIMEOUT,LBL[i] ;
 Constraints: the wait gives up after the time held in system variable
 $WAITTMOUT (units of 0.01 sec; default 3000 = 30 sec) and jumps to LBL[i].
 Set the timeout in-program with the parameter name instruction, e.g.
 $WAITTMOUT=(value). ERR_NUM waits can also trigger a CALL on match.
 Example:
     $WAITTMOUT=500 ;
-    WAIT DI[4:clamp closed]=ON, TIMEOUT LBL[10] ;
+    WAIT DI[4:clamp closed]=ON TIMEOUT,LBL[10] ;
 Manual: HandlingTool V9.40 sec 7.36
 
 ## SKIP CONDITION - arm the skip trigger

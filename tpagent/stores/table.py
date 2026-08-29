@@ -1,10 +1,15 @@
-"""stores/table.py -- the 2c source hierarchy: scan > cache > default_map.
+"""stores/table.py -- the 2c source hierarchy: scan > cache > none.
 
 Single-parser rule: this module is reg_io.py's only importer.
 The cache is the reg_io_tables row for the cell (guide Part 1.2): the
 entries column holds {"entries": [...], "flags": [...]} so a cached
 RegIOTable round-trips losslessly, staleness measured from the row's
 scanned_at against static_config table.max_table_age_hours.
+
+Owner decision (2026-08-29, replaces DESIGN.md 2c row 3): there is no
+default_index_map. No scan and no fresh cache => source "none" with an
+empty table - the robot is treated as empty, any index is usable, and
+the validator skips its existence layer (runtime passes table=None).
 """
 from __future__ import annotations
 
@@ -12,14 +17,12 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 from tpagent.config import static_config
-from tpagent.reg_io import IO_DIR, Entry, RegIOTable, parse_reg_io_csv
+from tpagent.reg_io import Entry, RegIOTable, parse_reg_io_csv
 from tpagent.stores.client import get_client
 
 TABLE = "reg_io_tables"
 
 
-class NoTableSource(Exception):
-    """No scan, no fresh cache, no default map -> friendly ask upstream."""
 
 
 def _age_hours(scanned_at: str) -> float | None:
@@ -49,18 +52,13 @@ def _rehydrate(row: dict) -> RegIOTable:
         flags=list(payload.get("flags", [])))
 
 
-def _synthetic_table(cell_id: str, index_map: dict) -> RegIOTable:
-    entries = []
-    for idx, note in (index_map.get("PR") or {}).items():
-        entries.append(Entry(type="PR", index=int(idx), comment=str(note),
-                             initialized=True, value="",
-                             category="REG", direction=None))
-    for key, note in (index_map.get("IO") or {}).items():
-        t, _, idx = key.partition("[")
-        entries.append(Entry(type=t, index=int(idx.rstrip("]")),
-                             comment=str(note), initialized=None, value="",
-                             category="IO", direction=IO_DIR.get(t)))
-    return RegIOTable(cell_id=cell_id, scanned_at="", entries=entries)
+def parse_scan(raw_csv: str) -> RegIOTable:
+    """Parse a reg_io_v1 CSV without persisting (CLI/tests convenience).
+
+    Lives here so the single-parser rule holds: stores/table.py stays
+    reg_io.py's only importer.
+    """
+    return parse_reg_io_csv(raw_csv)
 
 
 def cache_scan(cell_id: str, raw_csv: str, *, source: str = "scan",
@@ -89,7 +87,7 @@ def cache_scan(cell_id: str, raw_csv: str, *, source: str = "scan",
 
 def materialize(cell_id: str, scan_csv: str | None = None, *,
                 client=None, config: dict | None = None) -> tuple[RegIOTable, str]:
-    """SOFTWARE.md 6.9: scan > cache > default_map, else NoTableSource."""
+    """Source hierarchy: scan > fresh cache > "none" (empty robot)."""
     client = client or get_client()
     cfg = config if config is not None else static_config()
 
@@ -105,11 +103,4 @@ def materialize(cell_id: str, scan_csv: str | None = None, *,
         if age is not None and age <= max_age:
             return _rehydrate(rows[0]), f"cache({_fmt_age(age)})"
 
-    index_map = cfg.get("default_index_map") or {}
-    if index_map:
-        return _synthetic_table(cell_id, index_map), "default_map"
-
-    raise NoTableSource(
-        "I don't have a registers and IO map for this cell yet. Please "
-        "attach a reg_io_v1 scan export so I know which registers and "
-        "IO points exist.")
+    return RegIOTable(cell_id=cell_id, scanned_at=""), "none"
