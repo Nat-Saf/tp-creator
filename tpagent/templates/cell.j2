@@ -1,0 +1,12 @@
+CELL {{ cell_id }}
+Defaults (use unless the task says otherwise):
+{{ defaults }}
+Hard limits (never exceed):
+{{ limits }}
+{% if registers %}Registers and IO in this cell - use ONLY these (exact indexes):
+{{ registers }}
+Entries marked (uninitialized) exist but hold no taught value - do not use them.
+{% else %}No register map is loaded for this cell (empty robot): any register or
+IO index is usable. Use the indexes the task names; otherwise allocate
+sequentially from the lowest index (PR[1], R[1], RO[1], ...).
+{% endif %}

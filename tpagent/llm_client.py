@@ -28,7 +28,13 @@ TIMEOUT_SEC = 60
 
 
 class LLMClientError(RuntimeError):
-    """Provider/config failure with a human-readable message."""
+    """Provider/config failure. str() is a human-readable sentence (no
+    status codes - the language rule); .detail carries the technical
+    part for the steps trace."""
+
+    def __init__(self, message: str, detail: str = ""):
+        super().__init__(message)
+        self.detail = detail
 
 
 def _require_env(name: str, hint: str) -> str:
@@ -65,6 +71,7 @@ class LLMClient:
     def __init__(self, recorder: StepsRecorder, *, transport=None):
         self._recorder = recorder
         self._transport = transport
+        self._mock_calls = {"llm1": 0, "llm2": 0}
 
     # ---------- provider plumbing ----------
     def _base_url(self) -> str:
@@ -94,23 +101,24 @@ class LLMClient:
                 continue
             if r.status_code >= 400:                           # definitive: no retry
                 raise LLMClientError(
-                    f"The language model service rejected the request "
-                    f"(HTTP {r.status_code}). Please check the API key and "
-                    f"model name.")
+                    "The language model service rejected the request. "
+                    "Please check the API key and model name.",
+                    detail=f"HTTP {r.status_code}")
             try:
                 return r.json()
             except ValueError:
                 last = "the reply wasn't valid JSON"
                 continue
         raise LLMClientError(
-            f"The language model service didn't answer after {ATTEMPTS} "
-            f"attempts ({last}). Please try again in a moment.")
+            "The language model service didn't answer after several "
+            "attempts. Please try again in a moment.", detail=last)
 
     def _recorded_post(self, module: str, path: str, payload: dict) -> dict:
         try:
             data = self._post(path, payload)
         except LLMClientError as e:
-            self._recorder.record(module, payload, {"error": str(e)})
+            self._recorder.record(module, payload,
+                                  {"error": str(e), "detail": e.detail})
             raise
         self._recorder.record(module, payload, data)
         return data
@@ -124,11 +132,17 @@ class LLMClient:
         backend, _, arg = spec.partition(":")
 
         if backend == "mock":
+            # mock:<path>[,<path>...] serves the files in call order
+            # (the last one repeats) - lets tests script draft -> retry.
+            paths = [p.strip() for p in arg.split(",") if p.strip()]
+            n = self._mock_calls[role]
+            self._mock_calls[role] = n + 1
+            path = paths[min(n, len(paths) - 1)]
             try:
-                text = (config.ROOT / arg).read_text(encoding="utf-8")
+                text = (config.ROOT / path).read_text(encoding="utf-8")
             except OSError:
                 raise LLMClientError(
-                    f"The mock fixture '{arg}' set in {env_name} doesn't "
+                    f"The mock fixture '{path}' set in {env_name} doesn't "
                     f"exist or can't be read. Point it at a readable file.")
             prompt = {"backend": "mock", "model": spec, "messages": messages,
                       "temperature": 0, "max_tokens": _max_tokens(role)}

@@ -1,0 +1,134 @@
+You are a senior FANUC TP programmer writing a program for a real robot cell.
+Output ONLY the raw .LS program text - no markdown fences, no explanations.
+
+A canonical program looks EXACTLY like this (structure, numbering, spacing):
+/PROG PICK_PLACE_A
+/ATTR
+OWNER = MNEDITOR;
+COMMENT = "auto";
+/MN
+   1:  UFRAME_NUM=1 ;
+   2:  UTOOL_NUM=1 ;
+   3:  !pick from conveyor ;
+   4:  J PR[1:home] 100% FINE ;
+   5:  L PR[6:conveyor approach] 100mm/sec CNT50 ;
+   6:  L PR[5:conveyor pick] 50mm/sec FINE ;
+   7:  RO[1:gripper close]=ON ;
+   8:  WAIT 1.00(sec) ;
+   9:  L PR[6] 100mm/sec CNT50 ;
+  10:  L PR[8:fixture A place] 50mm/sec FINE ;
+  11:  RO[1]=OFF ;
+  12:  WAIT .50(sec) ;
+  13:  J PR[1:home] 100% FINE ;
+/POS
+/END
+
+Hard rules:
+- Every /MN body line is "  <n>:  <instruction> ;" - numbered, ending " ;".
+- Comments are "!text ;" lines. NEVER use ";" or "//" comments.
+- J speed is a percent (100%); L speed is mm/sec. Termination is FINE or
+  CNT0-100 (CNT always needs its number).
+- WAIT forms: "WAIT 1.00(sec)" or "WAIT DI[3]=ON TIMEOUT,LBL[10]". No other
+  wait spelling exists.
+- IF uses a single "=", e.g. "IF DI[3]=ON,JMP LBL[10]".
+- Keep /ATTR to OWNER and COMMENT only. Never invent instructions (no
+  TOOL[...], no $-variable SET lines).
+- Use FINE at contact points and on the final move; CNT for travel.
+- Output the COMPLETE program through /END - never stop early.
+Follow the CELL section exactly - its registers, limits and defaults are law.
+
+CELL line3_fanuc1
+Defaults (use unless the task says otherwise):
+  gripper_settle_sec: 0.5
+  pick_speed: 50mm/sec
+  speed: 100mm/sec
+  term: FINE
+  uframe: 1
+  utool: 1
+Hard limits (never exceed):
+  max_speed_mmsec: 250
+  max_wait_sec: 10
+Registers and IO in this cell - use ONLY these (exact indexes):
+PR[1] home
+PR[5] conveyor pick
+PR[6] conveyor approach
+PR[7] fixture A approach
+PR[8] fixture A place
+PR[9] fixture B place
+PR[10] (no label) (uninitialized)
+R[1] cycle count
+R[3] part counter
+R[4] (no label)
+SR[1] barcode buffer
+SR[2] recipe name, active
+PL[1] pallet A pattern
+DI[3] part present
+DI[4] conveyor running
+DI[7] (no label)
+DO[7] green lamp
+RI[1] gripper closed feedback
+RO[1] gripper close
+RO[2] gripper open
+UI[5] (no label)
+UO[1] cmd enabled
+GI[1] part type code
+AI[1] vacuum pressure
+F[12] cycle active flag
+Entries marked (uninitialized) exist but hold no taught value - do not use them.
+
+REFERENCE (retrieved TP documentation - follow these syntax forms):
+## L - linear motion
+Syntax: L ...
+
+TASK:
+  contact_speed: 50mm/sec
+  gripper: RO[1] 'gripper close'
+  gripper_settle_sec: 1.0
+  home: PR[1] 'home'
+  pick: PR[5] 'conveyor pick'
+  pick_approach: PR[6] 'conveyor approach'
+  place: PR[8] 'fixture A place'
+  place_approach: PR[7] 'fixture A approach'
+  task: pick a part from the conveyor and place it on fixture A
+  travel_speed: 100mm/sec
+
+PROGRAM NAME: PICK_PLACE_A
+Include these as ! comments where they apply:
+  - pick from conveyor
+  - place on fixture A
+
+PREVIOUS DRAFT (rejected by the validator):
+/PROG PICK_PLACE_A
+/ATTR
+OWNER = MNEDITOR;
+COMMENT = "auto v1";
+/MN
+   1:  UFRAME_NUM=1 ;
+   2:  UTOOL_NUM=1 ;
+   3:  !pick from conveyor ;
+   4:  J PR[1:home] 100% FINE ;
+   5:  L PR[10:conveyor approach] 100mm/sec FINE ;
+   6:  L PR[5:conveyor pick] 50mm/sec FINE ;
+   7:  RO[1:gripper close]=ON ;
+   8:  WAIT 1.0sec ;
+   9:  L PR[10] 100mm/sec FINE ;
+  10:  !place on fixture A ;
+  11:  L PR[8:fixture A place] 100mm/sec FINE ;
+  12:  RO[1]=OFF ;
+  13:  WAIT   0.50(sec) ;
+  14:  J PR[1:home] 100% FINE ;
+/POS
+/END
+
+
+VALIDATOR ERRORS (fix ONLY these, change nothing else):
+[
+  {
+    "found": "1.0sec",
+    "layer": "grammar",
+    "line": 8,
+    "suggestion": "WAIT 1.00(sec)"
+  }
+]
+FIX GUIDANCE:
+Write the wait as WAIT 1.00(sec).

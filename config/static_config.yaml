@@ -15,7 +15,7 @@ retry:
 llm:
   max_tokens:               # per-role caps (course budget rules)
     llm1: 800
-    llm2: 1600
+    llm2: 3000              # a full program + headers; 1600 truncated live
   reasoning_effort: minimal # gpt-5 family only; caps hidden reasoning spend
 table:
   max_table_age_hours: 72   # cache freshness bound (DESIGN.md 2c)

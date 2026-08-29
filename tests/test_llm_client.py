@@ -124,7 +124,7 @@ class TestMockBackend:
         assert len(steps) == 1
         assert steps[0]["module"] == "LLM2-Codegen"
         assert steps[0]["prompt"]["backend"] == "mock"
-        assert steps[0]["prompt"]["max_tokens"] == 1600
+        assert steps[0]["prompt"]["max_tokens"] == 3000
         assert steps[0]["response"]["choices"][0]["message"]["content"] == text
 
     def test_unknown_backend_rejected(self, env, monkeypatch):
@@ -163,12 +163,14 @@ class TestRetries:
             return httpx.Response(401, json={"error": "bad key"})
 
         client, rec = make_client(handler)
-        with pytest.raises(LLMClientError, match="HTTP 401"):
+        with pytest.raises(LLMClientError, match="rejected the request"):
             client.chat(modules.LLM1_INTAKE, [
                 {"role": "user", "content": "x"}], role="llm1")
         assert len(calls) == 1                       # definitive: no retries
         steps = rec.steps
-        assert len(steps) == 1 and "HTTP 401" in steps[0]["response"]["error"]
+        assert len(steps) == 1
+        assert "HTTP" not in steps[0]["response"]["error"]   # language rule
+        assert steps[0]["response"]["detail"] == "HTTP 401"
 
     def test_non_json_200_body_is_retried_and_recorded(self, env):
         calls = []
@@ -184,7 +186,7 @@ class TestRetries:
         assert len(calls) == 3
         steps = rec.steps                            # no-bypass: still traced
         assert len(steps) == 1
-        assert "valid JSON" in steps[0]["response"]["error"]
+        assert "valid JSON" in steps[0]["response"]["detail"]
 
     def test_exhausted_retries_record_error_step_then_raise(self, env):
         calls = []
@@ -201,4 +203,4 @@ class TestRetries:
         steps = rec.steps
         assert len(steps) == 1
         assert "error" in steps[0]["response"]
-        assert "HTTP 503" in steps[0]["response"]["error"]
+        assert steps[0]["response"]["detail"] == "HTTP 503"
