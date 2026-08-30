@@ -56,7 +56,10 @@ def parse_reg_io_csv(raw: str) -> RegIOTable:
         if line.startswith("#"):
             if ":" in line and not line.startswith("# notes"):
                 k, v = line[1:].split(":", 1)
-                meta[k.strip()] = v.strip()
+                # Excel re-saves pad short rows with trailing commas
+                # ("# schema: reg_io_v1,,,,") - strip them so an
+                # Excel-edited export still parses
+                meta[k.strip()] = v.strip().rstrip(",").strip()
         elif line.strip():
             body_lines.append(line)
 

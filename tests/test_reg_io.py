@@ -81,6 +81,17 @@ class TestParserBehaviors:
         assert len(t.entries) == 1
         assert any("non-numeric index" in f for f in t.flags)
 
+    def test_excel_resave_comma_padding_tolerated(self):
+        # Excel pads short rows to the max column count with commas
+        mangled = ("# schema: reg_io_v1,,,,\n"
+                   "# cell_id: line3_fanuc1,,,,\n"
+                   "# scanned_at: 2026-07-04T10:42:00,,,,\n"
+                   + HEADER + "PR,1,home,TRUE,\n")
+        t = parse_reg_io_csv(mangled)
+        assert t.cell_id == "line3_fanuc1"
+        assert t.scanned_at == "2026-07-04T10:42:00"
+        assert t.find("PR", 1).comment == "home"
+
     def test_extra_columns_tolerated(self):
         t = parse_reg_io_csv(
             META + "type,index,comment,initialized,value,extra\n"
