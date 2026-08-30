@@ -1,0 +1,26 @@
+type,index,comment,initialized,value
+PR,21,home,TRUE,"J: 0.0,0.0,0.0,0.0,-90.0,0.0"
+PR,25,conveyor pick,TRUE,"C: 512.3,-104.7,88.0,180.0,0.0,45.0"
+PR,26,conveyor approach,TRUE,"C: 512.3,-104.7,188.0,180.0,0.0,45.0"
+PR,27,fixture A approach,TRUE,"C: 291.0,220.5,160.0,180.0,0.0,90.0"
+PR,28,fixture A place,TRUE,"C: 291.0,220.5,95.0,180.0,0.0,90.0"
+PR,29,fixture B place,TRUE,"C: 291.0,-220.5,95.0,180.0,0.0,-90.0"
+PR,30,,FALSE,
+R,21,cycle count,TRUE,1042
+R,23,part counter,TRUE,12
+R,24,,TRUE,0
+SR,21,barcode buffer,TRUE,ABC-1042
+SR,22,"recipe name, active",TRUE,PICKPLACE_A
+PL,21,pallet A pattern,TRUE,"[1,1,1]"
+DI,23,part present,-,ON
+DI,24,conveyor running,-,OFF
+DI,27,,-,OFF
+DO,27,green lamp,-,OFF
+RI,21,gripper closed feedback,-,OFF
+RO,21,gripper close,-,OFF
+RO,22,gripper open,-,ON
+UI,25,,-,ON
+UO,21,cmd enabled,-,ON
+GI,21,part type code,-,3
+AI,21,vacuum pressure,-,0.82
+F,32,cycle active flag,-,OFF
