@@ -23,6 +23,21 @@ class TestConsistency:
         assert set(manifest["boxes"]) == set(REGISTRY)
         assert len(manifest["boxes"]) == len(REGISTRY)   # no duplicates
 
+    def test_manifest_flow_covers_registry(self):
+        # the agent-view flow: 10 numbered steps whose module references
+        # stay inside the registry and together touch every module
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        flow = manifest["flow"]
+        assert [s["step"] for s in flow] == list(range(1, 11))
+        seen = set()
+        for step in flow:
+            assert set(step) == {"step", "title", "modules", "text"}
+            assert step["title"] and step["text"]
+            assert set(step["modules"]) <= set(REGISTRY)
+            seen |= set(step["modules"])
+        assert seen == set(REGISTRY)
+        assert manifest["intro"] and all(manifest["intro"])
+
     def test_agent_info_example_steps_within_registry(self):
         examples = json.loads(EXAMPLES.read_text(encoding="utf-8"))
         assert len(examples) == 2
@@ -60,12 +75,20 @@ class TestEndpoints:
 
     def test_agent_info_schema(self):
         body = TestClient(app).get("/api/agent_info").json()
-        assert set(body) == {"description", "purpose", "prompt_template",
-                             "prompt_examples"}
+        assert set(body) == {"description", "purpose", "how_it_works",
+                             "prompt_template", "prompt_examples"}
         assert body["prompt_template"]["template"]
         assert "pick a part from <place>" in body["prompt_template"]["template"]
         assert len(body["prompt_examples"]) == 2
         assert body["description"] and body["purpose"]
+
+    def test_agent_info_serves_the_manifest_flow(self):
+        # the endpoint's story IS the diagram's manifest, verbatim
+        body = TestClient(app).get("/api/agent_info").json()
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        assert body["how_it_works"] == {"intro": manifest["intro"],
+                                        "flow": manifest["flow"]}
+        assert len(body["how_it_works"]["flow"]) == 10
 
     def test_team_info_still_exact(self):
         body = TestClient(app).get("/api/team_info").json()

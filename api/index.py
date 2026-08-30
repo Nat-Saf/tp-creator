@@ -74,6 +74,11 @@ def agent_info() -> dict:
     examples = json.loads(
         (Path(__file__).parent / "agent_info_examples.json")
         .read_text(encoding="utf-8"))
+    # written by `python -m tpagent.architecture` alongside the PNG, so
+    # the flow text and the diagram's numbered badges cannot disagree
+    manifest = json.loads(
+        (config.ROOT / "docs" / "architecture.json")
+        .read_text(encoding="utf-8"))
     return {
         "description":
             "TP Creator turns a plain-language task description into a "
@@ -89,6 +94,10 @@ def agent_info() -> dict:
             "pick-and-place style TP program - with safety advisories and "
             "a full reasoning trace - from one sentence, instead of "
             "hand-writing boilerplate on the teach pendant.",
+        "how_it_works": {
+            "intro": manifest["intro"],
+            "flow": manifest["flow"],
+        },
         "prompt_template": {
             "template":
                 "pick a part from <place> and put it on <place>, <style> - "

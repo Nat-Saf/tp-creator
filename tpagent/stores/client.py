@@ -15,7 +15,7 @@ _override = None
 
 
 def use_client(client) -> None:
-    """Inject a client (tests: mock; seed: real). Pass None to clear."""
+    """Inject a client (tests pass the mock). Pass None to clear."""
     global _override
     _override = client
 

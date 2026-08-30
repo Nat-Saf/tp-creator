@@ -10,14 +10,22 @@ safety limits) checks every draft before anything is delivered. A mandatory
 audit adds human-review advisories, and every model call is traced in the
 `steps` array you can inspect in the GUI.
 
-![Architecture](docs/architecture.png)
+![Agent architecture](docs/architecture.png)
 
-The topology is a hub: the **Runtime** enforces the loop mechanics (retry
-budgets, every draft → Validator, every pass → LLM1-Audit) while the models
-only decide strategy. **RAG-Embed** runs offline to index our own-words TP
-syntax notes (`corpus/prepared/`) into Pinecone; **RAG-Retrieve** queries
-them at request time. All state lives in Supabase - the deployment is fully
-serverless.
+The diagram is the **agent architecture** - the Design Document's Figure-1
+view of the deployed system, with badges ① - ⑩ marking the flow.
+The main idea: one deterministic machine, two narrow AI roles. **LLM1**
+(Intake/Audit) exists because human words are ambiguous - it is the only
+component allowed to interpret them, deciding per gap whether to use a
+default, infer, or ask; the **Runtime** (no AI) owns the mechanics models
+can't be trusted with: retry budgets, every draft → Validator, every pass
+→ LLM1-Audit, mandatory retrieval and the stop rules. **LLM2-Codegen**
+writes the code in a fresh context from a deterministically rendered
+prompt. `GET /api/agent_info` serves this same story as text: the intro
+plus the numbered flow. **RAG-Embed** runs offline to index our own-words
+TP syntax notes (`corpus/prepared/`) into Pinecone; **RAG-Retrieve**
+queries them before every first draft. All state lives in Supabase - the
+deployment is fully serverless.
 
 ## Try it
 
@@ -58,10 +66,13 @@ with its module name, prompt and response.
 |---|---|
 | `GET /` | the GUI |
 | `POST /api/execute` | `{"prompt": "..."}` → `{"status","error","response","steps"}` |
-| `GET /api/agent_info` | description, prompt template, two real recorded runs |
-| `GET /api/model_architecture` | the architecture diagram (PNG) |
+| `GET /api/agent_info` | how the agent works: intro + numbered flow, prompt template, two real recorded runs |
+| `GET /api/model_architecture` | the agent architecture diagram (PNG) |
 | `GET /api/team_info` | team details |
 | `GET /api/health` | `{"ok": true}` |
+
+Every GET endpoint also has a one-click button at the top of the GUI, so
+you can inspect its live response without leaving the page.
 
 ## Local development
 
@@ -69,7 +80,6 @@ with its module name, prompt and response.
 py -3.11 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 copy .env.template .env    # then fill the keys
-.venv\Scripts\python.exe -m tpagent.stores.seed        # load the demo cell
 .venv\Scripts\python.exe -m uvicorn api.index:app --port 8000
 ```
 

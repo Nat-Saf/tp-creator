@@ -9,5 +9,98 @@
     "RAG-Embed",
     "RAG-Retrieve",
     "Stores"
+  ],
+  "intro": [
+    "TP Creator turns one plain sentence into a validated FANUC TP (.LS) program. The design splits the work between two narrow AI roles and one deterministic machine, so everything creative is reviewable and everything mechanical is guaranteed.",
+    "LLM #1 (the LLM1-Intake and LLM1-Audit roles) exists because human words are ambiguous - it is the only component allowed to interpret them. It maps 'the conveyor' to the cell's real registers through their pendant notes, decides per gap whether to use a default, infer with a note, or ask the user, diagnoses validation failures, and reviews the finished program. It decides strategy - never mechanics.",
+    "The Runtime is deterministic and owns the mechanics precisely because models cannot be trusted with them: the retry budget, the unconditional edges (every draft goes to the Validator, every passing program to LLM1-Audit), mandatory documentation retrieval, and the stop rules. LLM2-Codegen writes the actual TP code in a fresh context from a deterministically rendered prompt, so nothing can slip past the Validator - the machine, not a model, decides when a program is good enough to deliver."
+  ],
+  "flow": [
+    {
+      "step": 1,
+      "title": "Request in",
+      "modules": [
+        "Runtime"
+      ],
+      "text": "The browser GUI sends the whole conversation transcript as the prompt (plus the optional registers/IO table CSV). The adapter builds the contract Request and the Runtime performs the mechanical level-A checks before any model is involved."
+    },
+    {
+      "step": 2,
+      "title": "Table materialized",
+      "modules": [
+        "Runtime",
+        "Stores"
+      ],
+      "text": "The Stores layer resolves the cell's table: an uploaded CSV wins (bare files get the reg_io_v1 metadata synthesized), else the bundled default table, else the robot is treated as empty and any index is usable. A session row opens in Supabase."
+    },
+    {
+      "step": 3,
+      "title": "Intake",
+      "modules": [
+        "LLM1-Intake"
+      ],
+      "text": "LLM1-Intake is the only place human words are interpreted: it maps them to real registers and IO through the pendant notes and applies the gap policy - use a default, infer with a note, or ask. An ambiguous or missing pick/place position always comes back as a question."
+    },
+    {
+      "step": 4,
+      "title": "Retrieval",
+      "modules": [
+        "Runtime",
+        "RAG-Retrieve",
+        "RAG-Embed"
+      ],
+      "text": "The Runtime always calls RAG-Retrieve for TP-syntax documentation before the first draft; LLM1-Intake may add up to two targeted queries. RAG-Embed built the Pinecone index offline from our own-words notes. Chunks go to the Renderer only - never through LLM1-Intake's context."
+    },
+    {
+      "step": 5,
+      "title": "Params out",
+      "modules": [
+        "LLM1-Intake"
+      ],
+      "text": "LLM1-Intake invokes the generate_program tool: parameters, program name and notes, plus fix guidance on retries. The task and notes are pinned to the first attempt, so a retry differs only in what is being fixed."
+    },
+    {
+      "step": 6,
+      "title": "Prompt and draft",
+      "modules": [
+        "Renderer",
+        "LLM2-Codegen"
+      ],
+      "text": "The Renderer deterministically assembles the LLM2-Codegen prompt from fixed sections (canonical program skeleton, cell, docs, task, notes, previous draft + fix on retries). It takes the table and config from the stores, never from LLM1-Intake's output - the tool call has no field that could carry them (no-leakage). LLM2-Codegen writes the TP draft in a fresh context."
+    },
+    {
+      "step": 7,
+      "title": "Validation",
+      "modules": [
+        "Validator"
+      ],
+      "text": "Every draft goes through the deterministic three-layer Validator: grammar token walks, existence against the table (skipped for an empty robot; an existing-but-untaught register is a warning, not an error), and safety limits with every speed unit converted or refused."
+    },
+    {
+      "step": 8,
+      "title": "Errors back",
+      "modules": [
+        "Runtime",
+        "LLM1-Intake"
+      ],
+      "text": "A failing verdict returns to LLM1-Intake for diagnosis and a bounded retry: the Runtime allows at most three drafts and stops mechanically on a third consecutive failure of the same layer and offender."
+    },
+    {
+      "step": 9,
+      "title": "Audit - always",
+      "modules": [
+        "LLM1-Audit"
+      ],
+      "text": "Every passing program is reviewed by LLM1-Audit for mapping and intent correctness, with the effective defaults in hand. Advisory only - findings never block delivery."
+    },
+    {
+      "step": 10,
+      "title": "Store and respond",
+      "modules": [
+        "Runtime",
+        "Stores"
+      ],
+      "text": "Outputs and the full report persist via Stores (Supabase); the adapter maps the result to the exact course shape {status, error, response, steps}. The steps recorder wraps the model client, so every chat and embedding call appears in steps, in order."
+    }
   ]
 }
