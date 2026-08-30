@@ -46,6 +46,10 @@
   details.steps > summary { cursor: pointer; font-size: .85rem;
         color: #2f6feb; font-weight: 600; user-select: none; }
   details.steps .report { margin: 8px 0 0; }
+  button.save { background: #fff; border: 1px solid #c9ced4;
+                padding: 6px 14px; font-size: .82rem; font-weight: 600;
+                margin: 8px 0 2px; color: #1c2128; }
+  button.save:hover { border-color: #1a7f37; color: #1a7f37; }
   details.step { margin: 8px 0 0 6px; border: 1px solid #e2e5e9;
                  border-radius: 8px; padding: 8px 10px; background: #fafbfc; }
   details.step > summary { cursor: pointer; font-weight: 650;
@@ -162,13 +166,32 @@ function stepsBlock(steps) {
   return outer;
 }
 
+function saveProgram(code) {
+  const m = code.match(/^\/PROG\s+(\S+)/);
+  const name = (m ? m[1] : "PROGRAM") + ".ls";
+  // robot tools expect CRLF line endings
+  const blob = new Blob([code.replace(/\r?\n/g, "\r\n") + "\r\n"],
+                        { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+}
+
 function showAssistant(responseText, steps) {
   const c = card("assistant", "TP Creator");
   const marker = "\n--- report ---\n";
   const cut = responseText.indexOf(marker);
   if (cut >= 0) {
     // the code is the answer; the report folds away like the steps trace
-    c.appendChild(el("pre", "", responseText.slice(0, cut).trim()));
+    const code = responseText.slice(0, cut).trim();
+    c.appendChild(el("pre", "", code));
+    const save = el("button", "save", "Save program (.ls)");
+    save.addEventListener("click", function () { saveProgram(code); });
+    c.appendChild(save);
     const rep = document.createElement("details");
     rep.className = "steps";
     rep.appendChild(el("summary", "", "Report & advisories"));
