@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import csv
 from datetime import datetime, timezone
+from functools import lru_cache
 from io import StringIO
 
 from tpagent.config import ROOT
@@ -82,6 +83,21 @@ def parse_scan(raw_csv: str) -> RegIOTable:
     return parse_reg_io_csv(raw_csv)
 
 
+@lru_cache(maxsize=8)
+def _default_table(path: str, mtime: float,
+                   cell_id: str) -> RegIOTable | None:
+    """Parse-once cache of the bundled default table, keyed on the file's
+    path+mtime so an edited file is picked up without a restart. The
+    returned table is SHARED across requests - every consumer treats it
+    read-only."""
+    try:
+        return _load(DEFAULT_TABLE.read_text(encoding="utf-8"), cell_id)
+    except (OSError, SchemaError):
+        # best-effort rung: a broken or foreign default file is not the
+        # requester's fault - fall through to the empty robot
+        return None
+
+
 def materialize(cell_id: str, scan_csv: str | None = None) \
         -> tuple[RegIOTable, str]:
     """Source hierarchy: uploaded scan > bundled default > empty robot."""
@@ -91,9 +107,11 @@ def materialize(cell_id: str, scan_csv: str | None = None) \
         return _load(scan_csv, cell_id), "scan"
 
     try:
-        raw = DEFAULT_TABLE.read_text(encoding="utf-8")
-        return _load(raw, cell_id), "default_table"
-    except (OSError, SchemaError):
-        # best-effort rung: a broken or foreign default file is not the
-        # requester's fault - fall through to the empty robot
-        return RegIOTable(cell_id=cell_id, scanned_at=""), "none"
+        mtime = DEFAULT_TABLE.stat().st_mtime
+    except OSError:
+        mtime = None
+    table = (_default_table(str(DEFAULT_TABLE), mtime, cell_id)
+             if mtime is not None else None)
+    if table is not None:
+        return table, "default_table"
+    return RegIOTable(cell_id=cell_id, scanned_at=""), "none"

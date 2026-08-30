@@ -56,6 +56,20 @@ class TestMaterialize:
         with pytest.raises(SchemaError, match="another_cell"):
             materialize("another_cell", CSV)
 
+    def test_default_table_parsed_once_until_file_changes(self, monkeypatch,
+                                                          tmp_path):
+        import os
+        f = tmp_path / "default.csv"
+        f.write_text("type,index,comment\nPR,1,home\n", encoding="utf-8")
+        monkeypatch.setattr(table, "DEFAULT_TABLE", f)
+        t1, _ = materialize("c1", None)
+        t2, _ = materialize("c1", None)
+        assert t1 is t2                     # same cached parse
+        f.write_text("type,index,comment\nPR,2,dock\n", encoding="utf-8")
+        os.utime(f, (1, 1))                 # force a distinct mtime
+        t3, _ = materialize("c1", None)
+        assert t3 is not t1 and t3.find("PR", 2) is not None
+
 
 class TestNormalization:
     def test_strict_file_passes_verbatim(self):
