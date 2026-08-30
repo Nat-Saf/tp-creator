@@ -16,7 +16,14 @@ sys.path.insert(0, str(ROOT))
 from fastapi.testclient import TestClient
 
 from api.index import app
-from tpagent import config
+from tpagent import config, modules
+
+# Owner decision (2026-08-30): the RECORDED EXAMPLES show the agent's
+# chat steps only (intake, codegen, audit) - the embedding call would
+# drown them in provider plumbing. Live /api/execute traces still record
+# every provider call, chat AND embeddings (compacted), per the course
+# rule; this filter applies to the agent_info showcase alone.
+_HIDDEN = {modules.RAG_EMBED, modules.RAG_RETRIEVE}
 
 config.load_dotenv()
 os.environ["TP_LLM1"] = "llmod:NBUECSE-gpt-5-mini"
@@ -34,7 +41,8 @@ for prompt in PROMPTS:
     assert body["status"] == "ok", body
     examples.append({"prompt": prompt,
                      "full_response": body["response"],
-                     "steps": body["steps"]})
+                     "steps": [s for s in body["steps"]
+                               if s["module"] not in _HIDDEN]})
     print(f"ran {prompt!r}: {len(body['steps'])} steps, "
           f"{len(body['response'])} chars")
 

@@ -70,6 +70,24 @@ def _chat_payload(model: str, messages: list[dict], max_tokens: int,
             "temperature": 0, "max_tokens": max_tokens}
 
 
+def compact_embeddings(data: dict) -> dict:
+    """Trace form of an /embeddings response: every raw vector becomes
+    {dim, preview, note}. Anything unexpected passes through untouched."""
+    if not isinstance(data.get("data"), list):
+        return data
+    out = dict(data)
+    out["data"] = [
+        {**row, "embedding": {
+            "dim": len(row["embedding"]),
+            "preview": row["embedding"][:6],
+            "note": "full vector omitted from the trace",
+        }}
+        if isinstance(row, dict) and isinstance(row.get("embedding"), list)
+        else row
+        for row in data["data"]]
+    return out
+
+
 class LLMClient:
     def __init__(self, recorder: StepsRecorder, *, transport=None):
         self._recorder = recorder
@@ -116,14 +134,18 @@ class LLMClient:
             "The language model service didn't answer after several "
             "attempts. Please try again in a moment.", detail=last)
 
-    def _recorded_post(self, module: str, path: str, payload: dict) -> dict:
+    def _recorded_post(self, module: str, path: str, payload: dict, *,
+                       trace=None) -> dict:
+        """POST and record. `trace` maps a SUCCESSFUL response to what the
+        steps trace stores (the caller still gets the raw data); errors
+        are always recorded verbatim."""
         try:
             data = self._post(path, payload)
         except LLMClientError as e:
             self._recorder.record(module, payload,
                                   {"error": str(e), "detail": e.detail})
             raise
-        self._recorder.record(module, payload, data)
+        self._recorder.record(module, payload, trace(data) if trace else data)
         return data
 
     # ---------- public surface ----------
@@ -170,11 +192,18 @@ class LLMClient:
             f"Use llmod:<model> or mock:<path>.")
 
     def embed(self, module: str, texts: list[str]) -> list[list[float]]:
-        """Embeddings for a list of texts; returns vectors in input order."""
+        """Embeddings for a list of texts; returns vectors in input order.
+
+        The steps trace keeps the call itself (course rule: every provider
+        call, chat AND embeddings) but stores each vector compacted -- its
+        dimension plus a short preview -- so /api/agent_info and the GUI
+        aren't drowned in 1536 raw floats. The caller gets the full
+        vectors untouched."""
         model = _require_env("EMBED_MODEL",
                              "Set it to the LLMod embedding deployment name.")
         payload = {"model": model, "input": list(texts)}
-        data = self._recorded_post(module, "/embeddings", payload)
+        data = self._recorded_post(module, "/embeddings", payload,
+                                   trace=compact_embeddings)
         try:
             rows = sorted(data["data"], key=lambda d: d.get("index", 0))
             return [row["embedding"] for row in rows]

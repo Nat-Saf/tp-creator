@@ -55,7 +55,15 @@ class TestScriptedFlow:
         assert steps[0]["response"] == CHAT_JSON
         assert steps[1]["prompt"] == {"model": "embed-1",
                                       "input": ["WAIT syntax"]}
-        assert steps[1]["response"] == EMBED_JSON
+        # the trace keeps the call but compacts the vectors (dim + preview)
+        assert steps[1]["response"] == {"data": [
+            {"index": 1, "embedding": {
+                "dim": 2, "preview": [0.3, 0.4],
+                "note": "full vector omitted from the trace"}},
+            {"index": 0, "embedding": {
+                "dim": 2, "preview": [0.1, 0.2],
+                "note": "full vector omitted from the trace"}},
+        ]}
 
     def test_budget_rules_in_payload_and_auth_header(self, env):
         requests = []

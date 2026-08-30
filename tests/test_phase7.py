@@ -49,6 +49,20 @@ class TestConsistency:
             for step in example["steps"]:
                 assert set(step) == {"module", "prompt", "response"}
 
+    def test_example_traces_show_agent_chat_steps_only(self):
+        # owner decision (2026-08-30): the agent_info SHOWCASE hides the
+        # embedding plumbing - its steps are the chat calls the reader
+        # cares about. Live /api/execute traces still record every
+        # provider call, embeddings compacted (see test_llm_client).
+        from tpagent.modules import RAG_EMBED, RAG_RETRIEVE
+        examples = json.loads(EXAMPLES.read_text(encoding="utf-8"))
+        for example in examples:
+            assert example["steps"]
+            for step in example["steps"]:
+                assert step["module"] not in {RAG_EMBED, RAG_RETRIEVE}
+                for row in (step["response"].get("data") or []):
+                    assert not isinstance(row.get("embedding"), list)
+
     def test_examples_show_program_and_clarification(self):
         program_ex, clarify_ex = json.loads(
             EXAMPLES.read_text(encoding="utf-8"))

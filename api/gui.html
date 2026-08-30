@@ -89,7 +89,7 @@
   <button class="api" data-ep="/api/health" title="GET /api/health">Health</button>
   <button class="api" data-ep="/api/agent_info" title="GET /api/agent_info">Agent info</button>
   <button class="api" data-ep="/api/model_architecture" data-kind="png" title="GET /api/model_architecture">Architecture</button>
-  <span title="POST /api/execute">Run Agent below &rarr; POST /api/execute</span>
+  <button class="api" id="rawexec" title="Raw JSON of the last POST /api/execute call (debugging)">Raw execute</button>
 </div>
 
 <main class="wrap">
@@ -121,6 +121,7 @@ const hint = document.getElementById("hint");
 let turns = [];          // committed transcript: {role, text}
 let busy = false;
 let tableCsv = null;     // loaded registers/IO table, resent every call
+let lastExecute = null;  // raw JSON of the last /api/execute reply
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -211,6 +212,7 @@ async function run() {
       body: JSON.stringify(payload)
     });
     const data = await r.json();
+    lastExecute = data;
     status.remove();
     if (data.status === "ok" && data.response !== null) {
       turns.push({ role: "user", text: text });
@@ -299,6 +301,19 @@ document.querySelectorAll("button.api").forEach(function (btn) {
     scrollDown();
   });
 });
+document.getElementById("rawexec").addEventListener("click", function () {
+  if (apiCard) apiCard.remove();
+  const c = apiCard = card("api", "POST /api/execute - raw response");
+  if (lastExecute) {
+    c.appendChild(el("pre", "", JSON.stringify(lastExecute, null, 2)));
+  } else {
+    c.appendChild(el("div", "msg",
+      "No run yet - press Run Agent first, then this button shows the " +
+      "raw JSON the endpoint returned."));
+  }
+  scrollDown();
+});
+
 // keep the conversation clear of the fixed composer, whatever its height
 const composerEl = document.getElementById("composer");
 const mainEl = document.querySelector("main");
