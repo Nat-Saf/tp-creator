@@ -89,5 +89,6 @@ def validate_request(req: Request) -> Optional[str]:
         return (f"I don't recognize these settings: {sorted(unknown)}. "
                 f"The defaults you can override are: {sorted(OVERRIDABLE_DEFAULTS)}.")
     if req.rag_backend not in ("online", "local"):
-        return "rag_backend must be 'online' or 'local'."
+        return ("I don't recognize that documentation profile. Please set "
+                "rag_backend to 'online' or 'local'.")
     return None

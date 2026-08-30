@@ -115,6 +115,8 @@ def materialize(cell_id: str, scan_csv: str | None = None, *,
     client = client or get_client()
     cfg = config if config is not None else static_config()
 
+    if scan_csv is not None and not scan_csv.strip():
+        scan_csv = None                 # a blank scan means "no scan sent"
     if scan_csv:
         table, _ = cache_scan(cell_id, scan_csv, client=client)
         return table, "scan"

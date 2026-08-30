@@ -190,6 +190,103 @@ class TestAuditSeesDefaults:                            # audit A9
         assert payload["effective_defaults"].get("speed")
 
 
+class TestReauditFixes:
+    """Round 2: findings from the re-audit sweep."""
+
+    def test_missing_column_with_extra_column_rejected(self, env):
+        # the original stores-phase finding, finally closed: proper-subset
+        # header check let "missing value + extra col" crash with KeyError
+        bad = ("# schema: reg_io_v1\n# cell_id: line3_fanuc1\n"
+               "# scanned_at: t\n"
+               "type,index,comment,initialized,extra\nPR,1,x,TRUE,y\n")
+        resp = handle(Request(prompt="pick", cell_id="line3_fanuc1",
+                              scan=bad), sb_client=env)
+        assert resp.status == "rejected"
+        assert "value" in resp.reason and "[" not in resp.reason
+
+    def test_api_shape_survives_malformed_inferred(self, env, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from api.index import app
+        from tpagent.contract import Report, Response
+
+        def fake_handle(req, **kw):
+            return Response(status="ok", draft_id="d", program_ls="/PROG X",
+                            file_ref="outputs/d",
+                            report=Report(inferred=["not-a-dict",
+                                                    {"text": "t",
+                                                     "decision": "d"}]))
+        monkeypatch.setenv("DEMO_CELL", "line3_fanuc1")
+        monkeypatch.setattr("api.index.runtime.handle", fake_handle)
+        r = TestClient(app).post("/api/execute", json={"prompt": "x"})
+        assert r.status_code == 200
+        body = r.json()
+        assert set(body) == {"status", "error", "response", "steps"}
+        assert body["status"] == "ok" and "not-a-dict" in body["response"]
+
+    def test_uncappable_motion_speeds_refused_under_cap(self):
+        from tpagent.validator import run
+        limits = {"max_speed_mmsec": 250, "max_wait_sec": 10}
+        prog = ("/PROG T\n/MN\n  1:  L PR[5] 4sec FINE ;\n"
+                "  2:  L PR[6] 2000deg/sec CNT50 ;\n"
+                "  3:  WAIT 2.00(sec) ;\n"
+                "  4:  DO[7]=PULSE,0.5sec ;\n/POS\n/END\n")
+        verdict = run(prog, None, limits)
+        speed_errs = [e for e in verdict.errors if e.layer == "limits"]
+        assert len(speed_errs) == 2                 # lines 1 and 2 only
+        assert all("mm/sec" in e.message for e in speed_errs)
+        assert {e.line for e in speed_errs} == {1, 2}
+
+    def test_post_draft_reretrieve_refreshes_docs(self, env, monkeypatch,
+                                                  tmp_path):
+        # DESIGN 5 escalation: re-retrieved documentation reaches the retry
+        gen = {"action": "generate_program",
+               "params": {"task": "pick and place"}, "program_name": "P",
+               "notes": [], "inferred": [], "base_draft": None,
+               "fix_guidance": None}
+        rag = {"action": "rag_retrieve", "query": "WAIT syntax"}
+        retry = {**gen, "base_draft": "last", "fix_guidance": "fix WAIT"}
+        paths = []
+        for name, obj in (("gen", gen), ("rag", rag), ("retry", retry)):
+            p = tmp_path / f"{name}.json"
+            p.write_text(json.dumps(obj), encoding="utf-8")
+            paths.append(str(p))
+        monkeypatch.setenv("TP_LLM1", "mock:" + ",".join(
+            paths + ["tests/fixtures/llm1_audit.json"]))
+        monkeypatch.setenv("TP_LLM2", "mock:tests/fixtures/v1.ls,"
+                                      "tests/fixtures/v2.ls")
+        queries = []
+
+        def spy(query, profile):
+            queries.append(query)
+            return [SimpleNamespace(text=f"## chunk for {query}")]
+
+        recorder = StepsRecorder()
+        resp = handle(Request(prompt="pick and place",
+                              cell_id="line3_fanuc1"),
+                      recorder=recorder, sb_client=env, retrieve_fn=spy)
+        assert resp.status == "ok"
+        assert queries == ["pick and place", "WAIT syntax"]
+        codegen = [s for s in recorder.steps
+                   if s["module"] == "LLM2-Codegen"]
+        retry_prompt = codegen[1]["prompt"]["messages"][0]["content"]
+        assert "chunk for WAIT syntax" in retry_prompt   # refreshed DOCS
+
+    def test_blank_scan_means_no_scan(self, env):
+        resp = handle(Request(prompt="pick and place",
+                              cell_id="line3_fanuc1", scan="   \n  "),
+                      sb_client=env)
+        assert resp.status == "ok"
+        assert resp.report.table_source.startswith("cache(")
+
+    def test_friendly_rag_backend_message(self):
+        from tpagent.contract import validate_request
+        msg = validate_request(Request(prompt="x", cell_id="c",
+                                       rag_backend="martian"))
+        assert msg is not None and "must be" not in msg
+        assert "online" in msg and "local" in msg
+
+
 class TestDerivedFieldsNotPersisted:                    # audit A8
     def test_cache_row_has_no_derived_fields(self):
         mock = MockSupabase()

@@ -10,10 +10,15 @@ never block; only the human rejects.
 
 Retrieval is a standard pre-generation step (DESIGN Figure 1): before
 the first draft the runtime always retrieves documentation for the
-task; LLM #1's rag_retrieve tool only adds extra targeted look-ups.
+task; LLM #1's rag_retrieve tool adds extra targeted look-ups.
 Retries are reproducible BY CONSTRUCTION: the retry prompt reuses the
-first attempt's TASK/NOTES/DOCS unchanged and differs only in the
-PREVIOUS+FIX sections (DESIGN 5).
+first attempt's TASK and NOTES unchanged and differs only in the
+PREVIOUS+FIX sections (DESIGN 5) - with ONE sanctioned exception: an
+explicit post-draft rag_retrieve refreshes DOCS, because DESIGN 5 names
+"re-retrieve documentation for the failing instruction" as an
+escalation strategy and that clause wins over full DOCS pinning.
+(DESIGN 4.5's "chunks back to LLM #1" Out-row is NOT implemented - the
+no-chunks-in-LLM1-context rule of 4.2/6.4 wins; LLM #1 sees counts.)
 """
 from __future__ import annotations
 
@@ -133,13 +138,14 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
     chunks: list[str] = []
     retrieval_note: str | None = None
     drafts: dict[str, str] = {}
+    draft_errors: dict[str, list] = {}    # verdict errors per draft id
     attempts = 0
     rag_calls = 0
     last_sig = None
     same_class_streak = 0
     program = None
     draft_id = None
-    pinned = None                 # first attempt's TASK/NOTES/DOCS (DESIGN 5)
+    pinned = None                 # first attempt's TASK+NOTES (DESIGN 5)
     params: dict = {}
     program_name = "PROGRAM"
     inferred: list = []
@@ -210,16 +216,16 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                     "params": params,
                     "program_name": program_name,
                     "notes": [str(n) for n in action.get("notes") or []],
-                    "chunks": list(chunks),
                 }
 
             base = action.get("base_draft")
             if base is not None:
                 base = base if base in drafts else draft_id
-            last_errors = ([e.to_dict() for e in verdict.errors]
-                           if base is not None and verdict else [])
+            base_errors = (draft_errors.get(base, [])
+                           if base is not None else [])
             args = renderer.GenerateArgs(
-                **pinned, base_draft=base, errors=last_errors,
+                **pinned, chunks=list(chunks),   # DOCS refresh = escalation
+                base_draft=base, errors=base_errors,
                 fix_guidance=action.get("fix_guidance"))
             rsess = renderer.RenderSession(example_ls=req.example_ls,
                                            drafts=drafts)
@@ -230,6 +236,7 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
             drafts[draft_id] = draft.text
 
             verdict = validate(draft.text, check_table, limits)
+            draft_errors[draft_id] = [e.to_dict() for e in verdict.errors]
             sess.save_verdict(draft_id, verdict.verdict,
                               errors=[e.to_dict() for e in verdict.errors],
                               stats={**verdict.stats,
@@ -254,8 +261,9 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 "attempts_left": max_attempts - attempts,
                 "escalation": same_class_streak >= 2}, sort_keys=True)})
 
-        if program is None:
-            return Response(status="failed", reason=_BUDGET_MSG,
+        if program is None:                 # loop cap: honest wording either way
+            return Response(status="failed",
+                            reason=_BUDGET_MSG if attempts else _PROTOCOL_MSG,
                             report=_failure_report(cfg, source, table,
                                                    attempts, verdict))
 

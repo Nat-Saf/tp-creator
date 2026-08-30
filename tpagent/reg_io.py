@@ -73,10 +73,14 @@ def parse_reg_io_csv(raw: str) -> RegIOTable:
     table = RegIOTable(cell_id=meta["cell_id"], scanned_at=meta["scanned_at"])
     reader = csv.DictReader(io.StringIO("\n".join(body_lines)))
     required = {"type", "index", "comment", "initialized", "value"}
-    if set(reader.fieldnames or []) < required:
+    missing = required - set(reader.fieldnames or [])
+    if missing:
         raise SchemaError(
-            f"The map's header row must contain {sorted(required)}; "
-            f"got {reader.fieldnames}.")
+            f"The map's header row is missing the "
+            f"column{'s' if len(missing) > 1 else ''} "
+            f"{', '.join(sorted(missing))} - it needs type, index, comment, "
+            f"initialized and value. Can you re-export it from the robot "
+            f"scan tool?")
 
     for n, row in enumerate(reader, start=2):
         t = (row["type"] or "").strip()

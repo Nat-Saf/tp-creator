@@ -9,6 +9,10 @@ from tpagent.validator.verdict import Err
 # can bypass the cap (1 cm/min = 10/60 mm/sec; 1 inch/min = 25.4/60)
 _SPEED = re.compile(r"\b(\d+(?:\.\d+)?)(mm/sec|cm/min|inch/min)\b")
 _TO_MMSEC = {"mm/sec": 1.0, "cm/min": 10.0 / 60.0, "inch/min": 25.4 / 60.0}
+# time-based and rotational motion speeds CANNOT be converted to mm/sec,
+# so under a speed cap they are refused rather than silently un-checked
+# (the termination anchor keeps WAIT ...(sec) and PULSE,0.5sec out)
+_UNCAPPABLE = re.compile(r"\b(\d+(?:\.\d+)?)(deg/sec|sec)\s+(?:FINE\b|CNT\d)")
 _WAIT = re.compile(r"\bWAIT\s+(\d*\.?\d+)(?:\(sec\)|sec)")
 
 
@@ -21,6 +25,14 @@ def check(text: str, limits: dict) -> list[Err]:
     for line_no, line in mn_body(text):
         if line.startswith("!"):
             continue
+        if max_speed is not None:
+            for m in _UNCAPPABLE.finditer(line):
+                errors.append(Err(
+                    layer="limits", line=line_no,
+                    found=m.group(1) + m.group(2),
+                    message=f"A {m.group(2)} motion speed can't be checked "
+                            f"against this cell's {max_speed}mm/sec limit - "
+                            f"please use mm/sec."))
         for m in _SPEED.finditer(line):
             raw = float(m.group(1))
             if raw <= 0:

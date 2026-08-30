@@ -109,8 +109,11 @@ def _report_summary(report) -> str:
              f"({report.mapping_confidence})",
              f"retries: {report.retries}"]
     for item in report.inferred:
-        lines.append(f"inferred: '{item.get('text')}' -> "
-                     f"{item.get('decision')}")
+        if isinstance(item, dict):        # LLM-shaped data: never trust it
+            lines.append(f"inferred: '{item.get('text')}' -> "
+                         f"{item.get('decision')}")
+        else:
+            lines.append(f"inferred: {item}")
     for advisory in report.advisories:
         lines.append(f"advisory: {advisory}")
     return "\n".join(lines)
@@ -129,23 +132,25 @@ def execute(body: ExecuteBody) -> dict:
             req, recorder=recorder,
             retrieve_fn=lambda q, profile: rag_retrieve.retrieve(
                 q, profile, llm=LLMClient(recorder)))
+
+        # the whole mapping stays inside the guard so the exact 4-key
+        # shape survives even malformed report content
+        if resp.status == "ok":
+            return {"status": "ok", "error": None,
+                    "response": resp.program_ls + "\n--- report ---\n"
+                    + _report_summary(resp.report),
+                    "steps": recorder.steps}
+        if resp.status == "needs_clarification":
+            return {"status": "ok", "error": None,
+                    "response": "\n".join(resp.questions),
+                    "steps": recorder.steps}
+        if resp.status == "rejected":
+            return {"status": "ok", "error": None, "response": resp.reason,
+                    "steps": recorder.steps}
+        return {"status": "error", "error": resp.reason,          # failed
+                "response": None, "steps": recorder.steps}
     except Exception:
         return {"status": "error",
                 "error": "Something went wrong on my side while building "
                          "the program. Please try again in a moment.",
                 "response": None, "steps": recorder.steps}
-
-    if resp.status == "ok":
-        return {"status": "ok", "error": None,
-                "response": resp.program_ls + "\n--- report ---\n"
-                + _report_summary(resp.report),
-                "steps": recorder.steps}
-    if resp.status == "needs_clarification":
-        return {"status": "ok", "error": None,
-                "response": "\n".join(resp.questions),
-                "steps": recorder.steps}
-    if resp.status == "rejected":
-        return {"status": "ok", "error": None, "response": resp.reason,
-                "steps": recorder.steps}
-    return {"status": "error", "error": resp.reason,          # failed
-            "response": None, "steps": recorder.steps}

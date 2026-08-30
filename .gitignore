@@ -6,7 +6,8 @@ sessions/
 out/
 cache/
 chroma/
-corpus/raw/*.pdf
+corpus/raw/*
+!corpus/raw/README.md
 .idea/
 
 *.pdf
