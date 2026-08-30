@@ -45,6 +45,7 @@
   details.steps { margin-top: 10px; }
   details.steps > summary { cursor: pointer; font-size: .85rem;
         color: #2f6feb; font-weight: 600; user-select: none; }
+  details.steps .report { margin: 8px 0 0; }
   details.step { margin: 8px 0 0 6px; border: 1px solid #e2e5e9;
                  border-radius: 8px; padding: 8px 10px; background: #fafbfc; }
   details.step > summary { cursor: pointer; font-weight: 650;
@@ -166,9 +167,14 @@ function showAssistant(responseText, steps) {
   const marker = "\n--- report ---\n";
   const cut = responseText.indexOf(marker);
   if (cut >= 0) {
-    c.appendChild(el("div", "report",
-                     responseText.slice(cut + marker.length)));
+    // the code is the answer; the report folds away like the steps trace
     c.appendChild(el("pre", "", responseText.slice(0, cut).trim()));
+    const rep = document.createElement("details");
+    rep.className = "steps";
+    rep.appendChild(el("summary", "", "Report & advisories"));
+    rep.appendChild(el("div", "report",
+                       responseText.slice(cut + marker.length)));
+    c.appendChild(rep);
   } else {
     c.appendChild(el("div", "msg", responseText));
   }
