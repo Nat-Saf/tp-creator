@@ -7,6 +7,12 @@ Fixed section order: SYSTEM -> CELL -> DOCS -> EXAMPLE? -> TASK -> NOTES
 No-leakage rule in code: render() takes the table and config straight
 from the stores; GenerateArgs has NO field that could carry them, so
 LLM #1's output can never smuggle a fake register list to LLM #2.
+
+Owner-accepted deviation from Figure 2 (2026-08-30): the SYSTEM template
+carries a canonical program skeleton and hard syntax rules in addition
+to the retrieved DOCS - live gpt-5-mini runs proved the fixed skeleton
+prevents malformed output, so it stays as belt-and-braces alongside the
+now-mandatory retrieval.
 """
 from __future__ import annotations
 

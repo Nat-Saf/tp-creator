@@ -17,10 +17,23 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 from tpagent.config import static_config
-from tpagent.reg_io import Entry, RegIOTable, parse_reg_io_csv
+from tpagent.reg_io import (IO_DIR, REG_TYPES, Entry, RegIOTable,
+                            SchemaError, parse_reg_io_csv)
 from tpagent.stores.client import get_client
 
 TABLE = "reg_io_tables"
+
+# derived Entry fields are computed at parse/read time, NEVER persisted -
+# a stored row can then never contradict its own type column (SOFTWARE.md 5)
+_DERIVED = ("category", "direction")
+
+
+def _derive(t: str) -> tuple[str, str | None]:
+    if t in REG_TYPES:
+        return "REG", None
+    if t in IO_DIR:
+        return "IO", IO_DIR[t]
+    return "UNKNOWN", None
 
 
 
@@ -45,10 +58,15 @@ def _fmt_age(hours: float) -> str:
 
 def _rehydrate(row: dict) -> RegIOTable:
     payload = row.get("entries") or {}
+    entries = []
+    for e in payload.get("entries", []):
+        clean = {k: v for k, v in e.items() if k not in _DERIVED}
+        category, direction = _derive(clean.get("type", ""))
+        entries.append(Entry(category=category, direction=direction, **clean))
     return RegIOTable(
         cell_id=row["cell_id"],
         scanned_at=row.get("scanned_at") or "",
-        entries=[Entry(**e) for e in payload.get("entries", [])],
+        entries=entries,
         flags=list(payload.get("flags", [])))
 
 
@@ -71,15 +89,21 @@ def cache_scan(cell_id: str, raw_csv: str, *, source: str = "scan",
     """
     client = client or get_client()
     table = parse_reg_io_csv(raw_csv)
-    table.cell_id = cell_id
+    if table.cell_id != cell_id:            # a map never crosses cells (2c)
+        raise SchemaError(
+            f"The registers and IO map you sent belongs to cell "
+            f"'{table.cell_id}', but this request is for cell '{cell_id}'. "
+            f"Please export the scan from the right cell.")
     if scanned_at is not None:
         table.scanned_at = scanned_at
     row = {
         "cell_id": cell_id,
         "scanned_at": table.scanned_at,
         "source": source,
-        "entries": {"entries": [asdict(e) for e in table.entries],
-                    "flags": list(table.flags)},
+        "entries": {"entries": [
+            {k: v for k, v in asdict(e).items() if k not in _DERIVED}
+            for e in table.entries],
+            "flags": list(table.flags)},
     }
     client.table(TABLE).upsert(row).execute()
     return table, row

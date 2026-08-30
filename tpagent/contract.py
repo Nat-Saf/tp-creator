@@ -37,7 +37,7 @@ class Request:
 @dataclass
 class Report:
     scan_used: Optional[str] = None          # timestamp of the mapping used
-    table_source: Optional[str] = None       # "scan" | "cache(<age>)" | "default_map"
+    table_source: Optional[str] = None       # "scan" | "cache(<age>)" | "none"
     mapping_confidence: Optional[str] = None  # "verified" | "unverified"
     effective_defaults: dict = field(default_factory=dict)
     positions: dict = field(default_factory=dict)   # "PR[5]": "note 'conveyor pick'"

@@ -77,7 +77,9 @@ class TestHandle:
         resp = handle(Request(prompt="pick and place",
                               cell_id="line3_fanuc1"), recorder=recorder)
         assert resp.status == "failed"
-        assert "couldn't produce a program" in resp.reason
+        # v1.ls fails with the same class every attempt -> the mechanical
+        # same-class stop fires (design: the old strategy can't spend more)
+        assert "same kind of problem" in resp.reason
         codegen = [s for s in recorder.steps if s["module"] == "LLM2-Codegen"]
         assert len(codegen) == 3            # retry.max_attempts, enforced
 

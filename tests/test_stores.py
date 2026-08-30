@@ -1,4 +1,4 @@
-"""Offline stores tests against the record/replay mock supabase client."""
+﻿"""Offline stores tests against the record/replay mock supabase client."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -22,19 +22,19 @@ def hours_ago(h: float) -> str:
 class TestMaterialize:
     def test_scan_wins_and_persists_cache_row(self):
         mock = MockSupabase()
-        t, source = table.materialize("cellX", CSV, client=mock, config=CFG)
+        t, source = table.materialize("line3_fanuc1", CSV, client=mock, config=CFG)
         assert source == "scan"
         assert len(t.entries) == 25 and len(t.flags) == 1
         row = mock.data["reg_io_tables"][0]
-        assert row["cell_id"] == "cellX" and row["source"] == "scan"
+        assert row["cell_id"] == "line3_fanuc1" and row["source"] == "scan"
         assert row["scanned_at"] == "2026-07-04T10:42:00"  # the CSV's own header
         assert len(row["entries"]["entries"]) == 25
         assert len(row["entries"]["flags"]) == 1
 
     def test_fresh_cache_hit_round_trips_the_table(self):
         mock = MockSupabase()
-        table.cache_scan("cellX", CSV, scanned_at=hours_ago(3), client=mock)
-        t, source = table.materialize("cellX", None, client=mock, config=CFG)
+        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(3), client=mock)
+        t, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
         assert source == "cache(3h)"
         assert len(t.entries) == 25 and len(t.flags) == 1
         assert t.find("PR", 10).initialized is False        # bool round-trip
@@ -44,21 +44,21 @@ class TestMaterialize:
 
     def test_minutes_age_format(self):
         mock = MockSupabase()
-        table.cache_scan("cellX", CSV, scanned_at=hours_ago(0.5), client=mock)
-        _, source = table.materialize("cellX", None, client=mock, config=CFG)
+        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(0.5), client=mock)
+        _, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
         assert source == "cache(30m)"
 
     def test_stale_cache_means_empty_robot(self):
         mock = MockSupabase()
-        table.cache_scan("cellX", CSV, scanned_at=hours_ago(100), client=mock)
-        t, source = table.materialize("cellX", None, client=mock, config=CFG)
+        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(100), client=mock)
+        t, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
         assert source == "none"
-        assert t.entries == [] and t.cell_id == "cellX"
+        assert t.entries == [] and t.cell_id == "line3_fanuc1"
 
     def test_unparseable_scanned_at_refuses_cache(self):
         mock = MockSupabase()
-        table.cache_scan("cellX", CSV, scanned_at="not-a-date", client=mock)
-        _, source = table.materialize("cellX", None, client=mock, config=CFG)
+        table.cache_scan("line3_fanuc1", CSV, scanned_at="not-a-date", client=mock)
+        _, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
         assert source == "none"
 
     def test_no_source_returns_empty_robot(self):
@@ -68,9 +68,15 @@ class TestMaterialize:
 
     def test_scan_for_other_cell_does_not_leak(self):
         mock = MockSupabase()
-        table.cache_scan("cellA", CSV, scanned_at=hours_ago(1), client=mock)
+        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(1),
+                         client=mock)
         _, source = table.materialize("cellB", None, client=mock, config=CFG)
         assert source == "none"
+
+    def test_cache_scan_rejects_foreign_cell_csv(self):
+        from tpagent.stores.table import SchemaError
+        with pytest.raises(SchemaError, match="another_cell"):
+            table.cache_scan("another_cell", CSV, client=MockSupabase())
 
 
 class TestSession:

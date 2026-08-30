@@ -84,7 +84,8 @@ def run(text: str, table, limits: dict, mode: str = "gate") -> Verdict:
                    errors=errors, stats=stats, warnings=warnings)
 
 
-def _friendly(err: Err) -> str:
+def friendly(err: Err) -> str:
+    """One plain sentence for a human (used in reports and the CLI)."""
     where = f"line {err.line}"
     if err.message:
         return f"{where}: {err.message}"
@@ -125,7 +126,7 @@ def main() -> None:
                   static_config().get("limits", {}), mode=args.mode)
     print(json.dumps(verdict.to_dict(), indent=2))
     for err in verdict.errors:
-        print(_friendly(err))
+        print(friendly(err))
     if not verdict.errors:
         print("The program passed every check.")
 

@@ -14,17 +14,20 @@ from tpagent.llm_client import LLMClient
 
 _AUDIT_SYSTEM = """You are auditing a FANUC TP program that already passed a
 deterministic validator. Judge SEMANTICS only: does the program plausibly do
-what the task params say, are approach/retreat moves sensible, is anything
-risky worth a human look? You cannot block delivery.
+what the task params say, are approach/retreat moves sensible, did the
+effective defaults and any user-requested values actually land in the code
+(speeds, settle times, frames), is anything risky worth a human look? You
+cannot block delivery.
 
 Reply with ONE JSON object, nothing else:
 {"advisories": ["<plain, friendly, self-contained sentence>", ...]}
 Return an empty list when nothing is worth flagging. At most 3 advisories."""
 
 
-def semantic_audit(program: str, params: dict, table,
-                   llm: LLMClient) -> list[str]:
+def semantic_audit(program: str, params: dict, table, llm: LLMClient,
+                   effective_defaults: dict | None = None) -> list[str]:
     payload = {"program": program, "params": params,
+               "effective_defaults": effective_defaults or {},
                "table_notes": llm1.table_view(table)}
     raw = llm.chat(modules.LLM1_AUDIT, [
         {"role": "system", "content": _AUDIT_SYSTEM},

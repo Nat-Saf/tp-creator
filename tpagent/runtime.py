@@ -1,10 +1,19 @@
 """runtime.py -- handle(): the session loop (SOFTWARE.md 6.3).
 
 LLM #1 decides strategy; this runtime enforces the mechanics: the retry
-budget (retry.max_attempts), the same-error-class-twice escalation, and
-the unconditional edges - every draft goes to the Validator, every pass
-goes to the LLM1-Audit, and only finalize() returns a Response. The
-auditor can never block; only the human rejects.
+budget (retry.max_attempts), the same-error-class rule (a third
+consecutive failure of the same class ends the run mechanically - the
+old strategy cannot spend the rest of the budget), and the unconditional
+edges - every draft goes to the Validator, every pass goes to the
+LLM1-Audit, and only finalize() returns an ok Response. The auditor can
+never block; only the human rejects.
+
+Retrieval is a standard pre-generation step (DESIGN Figure 1): before
+the first draft the runtime always retrieves documentation for the
+task; LLM #1's rag_retrieve tool only adds extra targeted look-ups.
+Retries are reproducible BY CONSTRUCTION: the retry prompt reuses the
+first attempt's TASK/NOTES/DOCS unchanged and differs only in the
+PREVIOUS+FIX sections (DESIGN 5).
 """
 from __future__ import annotations
 
@@ -20,15 +29,22 @@ from tpagent.steps import StepsRecorder
 from tpagent.stores import output as output_store
 from tpagent.stores import session as session_store
 from tpagent.stores import table as table_store
+from tpagent.stores.table import SchemaError
 from tpagent.validator import run as validate
+from tpagent.validator.verdict import friendly
 
 MAX_RAG_CALLS = 2
 
 _BUDGET_MSG = ("I tried a few drafts but couldn't produce a program that "
                "passes every check. Please simplify the request or tell me "
                "more precisely which positions to use.")
+_STRATEGY_MSG = ("I kept running into the same kind of problem while "
+                 "drafting the program. Please simplify the request or name "
+                 "the exact positions and signals to use.")
 _PROTOCOL_MSG = ("I couldn't work out a plan for this request. Please "
                  "rephrase it or try again in a moment.")
+_LOCAL_MSG = ("The local retrieval profile isn't set up in this deployment "
+              "yet - please use the online profile.")
 
 
 def _positions(program: str, table) -> dict:
@@ -52,12 +68,34 @@ def _mandatory_advisories(source: str) -> list[str]:
     return []
 
 
+def _failure_report(cfg: dict, source: str, table, attempts: int,
+                    verdict) -> Report:
+    """DESIGN 5 'Bounded': a failure carries the last verdict's story."""
+    advisories = []
+    if verdict is not None and verdict.errors:
+        advisories.append(f"The last draft still had "
+                          f"{len(verdict.errors)} problem(s):")
+        advisories += [friendly(e) for e in verdict.errors[:5]]
+        if len(verdict.errors) > 5:
+            advisories.append(f"...and {len(verdict.errors) - 5} more - "
+                              f"the full list is in the steps trace.")
+    return Report(
+        scan_used=(table.scanned_at or None) if table is not None else None,
+        table_source=source,
+        mapping_confidence="unverified" if source == "none" else "verified",
+        effective_defaults=cfg.get("defaults", {}),
+        retries=max(attempts - 1, 0),
+        advisories=advisories)
+
+
 def handle(req: Request, *, recorder: StepsRecorder | None = None,
            sb_client=None, transport=None, retrieve_fn=None) -> Response:
     recorder = recorder if recorder is not None else StepsRecorder()
 
     if (msg := validate_request(req)) is not None:          # level A
         return Response(status="rejected", reason=msg)
+    if req.rag_backend == "local":          # accepted by contract, not built
+        return Response(status="rejected", reason=_LOCAL_MSG)
 
     cfg = static_config()
     cfg = {**cfg, "defaults": {**cfg.get("defaults", {}),
@@ -65,8 +103,12 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
     limits = cfg.get("limits", {})
     max_attempts = int((cfg.get("retry") or {}).get("max_attempts", 3))
 
-    table, source = table_store.materialize(req.cell_id, req.scan,
-                                            client=sb_client)
+    try:
+        table, source = table_store.materialize(req.cell_id, req.scan,
+                                                client=sb_client)
+    except SchemaError as e:                # bad scan = level-A reject (2b)
+        return Response(status="rejected", reason=str(e))
+
     check_table = None if source == "none" else table
     sess = session_store.open(req.cell_id, req.revision_of, client=sb_client)
 
@@ -89,16 +131,29 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
         example_attached=bool(req.example_ls), answers=req.answers)
 
     chunks: list[str] = []
+    retrieval_note: str | None = None
     drafts: dict[str, str] = {}
     attempts = 0
     rag_calls = 0
     last_sig = None
-    escalated = False
+    same_class_streak = 0
     program = None
     draft_id = None
+    pinned = None                 # first attempt's TASK/NOTES/DOCS (DESIGN 5)
     params: dict = {}
     program_name = "PROGRAM"
     inferred: list = []
+    verdict = None
+
+    def retrieve(query: str) -> list[str]:
+        nonlocal retrieval_note
+        try:
+            return [c.text for c in retrieve_fn(query, req.rag_backend)]
+        except Exception:
+            retrieval_note = (
+                "I couldn't reach the documentation index for this run, so "
+                "the program relies on the built-in syntax rules only.")
+            return []
 
     try:
         for _ in range(2 * max_attempts + 3):
@@ -106,9 +161,11 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
             messages.append({"role": "assistant", "content": raw})
 
             if action["action"] == "reject":
-                if attempts:            # mid-loop bail-out is a failure, and
-                    return Response(    # LLM #1's jargon never reaches the user
-                        status="failed", reason=_BUDGET_MSG)
+                if attempts:        # mid-loop bail-out is a failure, and
+                    return Response(  # LLM #1 jargon never reaches the user
+                        status="failed", reason=_BUDGET_MSG,
+                        report=_failure_report(cfg, source, table,
+                                               attempts, verdict))
                 return Response(status="rejected",
                                 reason=action.get("reason") or _PROTOCOL_MSG)
 
@@ -125,30 +182,44 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 got = 0
                 if retrieve_fn is not None and rag_calls < MAX_RAG_CALLS:
                     rag_calls += 1
-                    chunks = [c.text for c in
-                              retrieve_fn(str(action.get("query", "")))]
-                    got = len(chunks)
+                    fresh = retrieve(str(action.get("query", "")))
+                    if fresh:
+                        chunks = fresh
+                        got = len(fresh)
                 messages.append({"role": "user", "content": json.dumps(
                     {"tool": "rag_retrieve", "retrieved": got})})
                 continue
 
             # generate_program
             if attempts >= max_attempts:
-                return Response(status="failed", reason=_BUDGET_MSG)
+                return Response(status="failed", reason=_BUDGET_MSG,
+                                report=_failure_report(cfg, source, table,
+                                                       attempts, verdict))
             attempts += 1
-            params = action.get("params") or {}
-            program_name = str(action.get("program_name") or "PROGRAM")
             inferred.extend(action.get("inferred") or [])
+
+            if pinned is None:                  # first attempt: fix the task
+                params = action.get("params") or {}
+                program_name = str(action.get("program_name") or "PROGRAM")
+                if retrieve_fn is not None and not chunks:
+                    # mandatory pre-generation retrieval (DESIGN flow step 4)
+                    query = str(params.get("task")
+                                or req.prompt.splitlines()[-1])[:300]
+                    chunks = retrieve(query)
+                pinned = {
+                    "params": params,
+                    "program_name": program_name,
+                    "notes": [str(n) for n in action.get("notes") or []],
+                    "chunks": list(chunks),
+                }
 
             base = action.get("base_draft")
             if base is not None:
                 base = base if base in drafts else draft_id
             last_errors = ([e.to_dict() for e in verdict.errors]
-                           if base is not None else [])
+                           if base is not None and verdict else [])
             args = renderer.GenerateArgs(
-                params=params, program_name=program_name,
-                notes=[str(n) for n in action.get("notes") or []],
-                chunks=chunks, base_draft=base, errors=last_errors,
+                **pinned, base_draft=base, errors=last_errors,
                 fix_guidance=action.get("fix_guidance"))
             rsess = renderer.RenderSession(example_ls=req.example_ls,
                                            drafts=drafts)
@@ -168,29 +239,42 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 break
 
             sig = tuple(sorted({e.layer for e in verdict.errors}))
-            escalated = sig == last_sig
+            same_class_streak = same_class_streak + 1 if sig == last_sig \
+                else 1
             last_sig = sig
+            if same_class_streak >= 3:      # mechanical stop: old strategy
+                return Response(status="failed", reason=_STRATEGY_MSG,
+                                report=_failure_report(cfg, source, table,
+                                                       attempts, verdict))
             messages.append({"role": "user", "content": json.dumps({
                 "draft_id": draft_id,
                 "validator_errors": [e.to_dict()
                                      for e in verdict.errors[:10]],
                 "attempt": attempts,
                 "attempts_left": max_attempts - attempts,
-                "escalation": escalated}, sort_keys=True)})
+                "escalation": same_class_streak >= 2}, sort_keys=True)})
 
         if program is None:
-            return Response(status="failed", reason=_BUDGET_MSG)
+            return Response(status="failed", reason=_BUDGET_MSG,
+                            report=_failure_report(cfg, source, table,
+                                                   attempts, verdict))
 
         try:                                # audit ALWAYS; can never block
-            advisories = review.semantic_audit(program, params, table, llm)
+            advisories = review.semantic_audit(
+                program, params, table, llm,
+                effective_defaults=cfg.get("defaults", {}))
         except (LLMClientError, llm1.ProtocolError):
             advisories = ["The automatic review wasn't available this time "
                           "- please give the program a quick manual look."]
 
     except llm1.ProtocolError:
-        return Response(status="failed", reason=_PROTOCOL_MSG)
+        return Response(status="failed", reason=_PROTOCOL_MSG,
+                        report=_failure_report(cfg, source, table,
+                                               attempts, verdict))
     except LLMClientError as e:
-        return Response(status="failed", reason=str(e))
+        return Response(status="failed", reason=str(e),
+                        report=_failure_report(cfg, source, table,
+                                               attempts, verdict))
 
     report = Report(
         scan_used=table.scanned_at or None,
@@ -200,8 +284,9 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
         positions=_positions(program, table),
         inferred=inferred,
         retries=attempts - 1,
-        advisories=_mandatory_advisories(source) + verdict.warnings
-        + advisories)
+        advisories=_mandatory_advisories(source)
+        + ([retrieval_note] if retrieval_note else [])
+        + verdict.warnings + advisories)
     file_ref = output_store.save(sess.id, draft_id, program_name, program,
                                  asdict(report), client=sb_client)
     sess.log_decision(f"delivered {draft_id} after {attempts} attempt(s)")

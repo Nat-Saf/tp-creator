@@ -127,8 +127,8 @@ def execute(body: ExecuteBody) -> dict:
                       cell_id=os.environ.get("DEMO_CELL", "line3_fanuc1"))
         resp = runtime.handle(
             req, recorder=recorder,
-            retrieve_fn=lambda q: rag_retrieve.retrieve(
-                q, llm=LLMClient(recorder)))
+            retrieve_fn=lambda q, profile: rag_retrieve.retrieve(
+                q, profile, llm=LLMClient(recorder)))
     except Exception:
         return {"status": "error",
                 "error": "Something went wrong on my side while building "
