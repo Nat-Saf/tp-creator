@@ -1,77 +1,80 @@
-"""stores/table.py -- the 2c source hierarchy: scan > cache > none.
+"""stores/table.py -- table sources: upload > bundled default > none.
 
 Single-parser rule: this module is reg_io.py's only importer.
-The cache is the reg_io_tables row for the cell (guide Part 1.2): the
-entries column holds {"entries": [...], "flags": [...]} so a cached
-RegIOTable round-trips losslessly, staleness measured from the row's
-scanned_at against static_config table.max_table_age_hours.
 
-Owner decision (2026-08-29, replaces DESIGN.md 2c row 3): there is no
-default_index_map. No scan and no fresh cache => source "none" with an
-empty table - the robot is treated as empty, any index is usable, and
-the validator skips its existence layer (runtime passes table=None).
+Owner decision (2026-08-30, supersedes DESIGN.md 2c rows 2-3 AND the
+earlier Supabase cache): there is NO table cache and no staleness
+window. The caller sends its table CSV with every request (the GUI
+re-attaches the loaded file each turn); with no upload, the bundled
+config/default_table.csv is the cell's table; if that file is missing,
+unreadable, or names a different cell, the robot is treated as EMPTY
+(any index usable - the runtime passes table=None to the validator).
+
+Bare CSVs (a header row with type,index and optionally comment,
+initialized, value - no '#' meta lines) are normalized to the reg_io_v1
+wire format here, BEFORE the single parser; strict reg_io_v1 files pass
+through verbatim and must name the request's cell.
 """
 from __future__ import annotations
 
-from dataclasses import asdict
+import csv
 from datetime import datetime, timezone
+from io import StringIO
 
-from tpagent.config import static_config
-from tpagent.reg_io import (IO_DIR, REG_TYPES, Entry, RegIOTable,
-                            SchemaError, parse_reg_io_csv)
-from tpagent.stores.client import get_client
+from tpagent.config import ROOT
+from tpagent.reg_io import RegIOTable, SchemaError, parse_reg_io_csv
 
-TABLE = "reg_io_tables"
+DEFAULT_TABLE = ROOT / "config" / "default_table.csv"
 
-# derived Entry fields are computed at parse/read time, NEVER persisted -
-# a stored row can then never contradict its own type column (SOFTWARE.md 5)
-_DERIVED = ("category", "direction")
+_COLUMNS = ["type", "index", "comment", "initialized", "value"]
+_PAD = {"comment": "", "initialized": "TRUE", "value": ""}
 
 
-def _derive(t: str) -> tuple[str, str | None]:
-    if t in REG_TYPES:
-        return "REG", None
-    if t in IO_DIR:
-        return "IO", IO_DIR[t]
-    return "UNKNOWN", None
+def normalize_scan(raw: str, cell_id: str) -> str:
+    """Turn a bare CSV into reg_io_v1 text; strict files pass verbatim."""
+    if any(line.strip().lower().startswith("# schema:")
+           for line in raw.splitlines()):
+        return raw
+
+    rows = [r for r in csv.reader(StringIO(raw))
+            if any(cell.strip() for cell in r)]
+    if not rows:
+        raise SchemaError(
+            "The table file is empty. It needs a header row with at least "
+            "'type' and 'index' columns, then one row per register or IO "
+            "point.")
+    header = [cell.strip().lower() for cell in rows[0]]
+    if "type" not in header or "index" not in header:
+        raise SchemaError(
+            "The table file needs at least 'type' and 'index' columns "
+            "(plus optional comment, initialized and value). Can you check "
+            "the file's header row?")
+    missing = [c for c in _COLUMNS if c not in header]
+
+    out = StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(header + missing)
+    for row in rows[1:]:
+        row = row + [""] * (len(header) - len(row))     # ragged rows
+        writer.writerow(row[:len(header)] + [_PAD[c] for c in missing])
+
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return (f"# schema: reg_io_v1\n# cell_id: {cell_id}\n"
+            f"# scanned_at: {now}\n" + out.getvalue())
 
 
-
-
-def _age_hours(scanned_at: str) -> float | None:
-    try:
-        dt = datetime.fromisoformat(scanned_at)
-    except (TypeError, ValueError):
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 3600.0)
-
-
-def _fmt_age(hours: float) -> str:
-    if hours < 1:
-        return f"{int(hours * 60)}m"
-    if hours < 48:
-        return f"{int(round(hours))}h"
-    return f"{int(hours // 24)}d"
-
-
-def _rehydrate(row: dict) -> RegIOTable:
-    payload = row.get("entries") or {}
-    entries = []
-    for e in payload.get("entries", []):
-        clean = {k: v for k, v in e.items() if k not in _DERIVED}
-        category, direction = _derive(clean.get("type", ""))
-        entries.append(Entry(category=category, direction=direction, **clean))
-    return RegIOTable(
-        cell_id=row["cell_id"],
-        scanned_at=row.get("scanned_at") or "",
-        entries=entries,
-        flags=list(payload.get("flags", [])))
+def _load(raw: str, cell_id: str) -> RegIOTable:
+    table = parse_reg_io_csv(normalize_scan(raw, cell_id))
+    if table.cell_id != cell_id:            # a map never crosses cells (2c)
+        raise SchemaError(
+            f"The registers and IO map you sent belongs to cell "
+            f"'{table.cell_id}', but this request is for cell '{cell_id}'. "
+            f"Please export the table for the right cell.")
+    return table
 
 
 def parse_scan(raw_csv: str) -> RegIOTable:
-    """Parse a reg_io_v1 CSV without persisting (CLI/tests convenience).
+    """Parse a strict reg_io_v1 CSV (CLI/tests convenience).
 
     Lives here so the single-parser rule holds: stores/table.py stays
     reg_io.py's only importer.
@@ -79,54 +82,18 @@ def parse_scan(raw_csv: str) -> RegIOTable:
     return parse_reg_io_csv(raw_csv)
 
 
-def cache_scan(cell_id: str, raw_csv: str, *, source: str = "scan",
-               scanned_at: str | None = None, client=None) -> tuple[RegIOTable, dict]:
-    """Parse a reg_io_v1 CSV and persist it as the cell's cache row.
-
-    scanned_at overrides the CSV's own header timestamp (the seed stamps
-    delivery time so the demo cell starts fresh); the parsed table carries
-    whatever the row records.
-    """
-    client = client or get_client()
-    table = parse_reg_io_csv(raw_csv)
-    if table.cell_id != cell_id:            # a map never crosses cells (2c)
-        raise SchemaError(
-            f"The registers and IO map you sent belongs to cell "
-            f"'{table.cell_id}', but this request is for cell '{cell_id}'. "
-            f"Please export the scan from the right cell.")
-    if scanned_at is not None:
-        table.scanned_at = scanned_at
-    row = {
-        "cell_id": cell_id,
-        "scanned_at": table.scanned_at,
-        "source": source,
-        "entries": {"entries": [
-            {k: v for k, v in asdict(e).items() if k not in _DERIVED}
-            for e in table.entries],
-            "flags": list(table.flags)},
-    }
-    client.table(TABLE).upsert(row).execute()
-    return table, row
-
-
-def materialize(cell_id: str, scan_csv: str | None = None, *,
-                client=None, config: dict | None = None) -> tuple[RegIOTable, str]:
-    """Source hierarchy: scan > fresh cache > "none" (empty robot)."""
-    client = client or get_client()
-    cfg = config if config is not None else static_config()
-
+def materialize(cell_id: str, scan_csv: str | None = None) \
+        -> tuple[RegIOTable, str]:
+    """Source hierarchy: uploaded scan > bundled default > empty robot."""
     if scan_csv is not None and not scan_csv.strip():
         scan_csv = None                 # a blank scan means "no scan sent"
     if scan_csv:
-        table, _ = cache_scan(cell_id, scan_csv, client=client)
-        return table, "scan"
+        return _load(scan_csv, cell_id), "scan"
 
-    rows = (client.table(TABLE).select("*")
-            .eq("cell_id", cell_id).limit(1).execute().data)
-    if rows:
-        max_age = (cfg.get("table") or {}).get("max_table_age_hours", 72)
-        age = _age_hours(rows[0].get("scanned_at") or "")
-        if age is not None and age <= max_age:
-            return _rehydrate(rows[0]), f"cache({_fmt_age(age)})"
-
-    return RegIOTable(cell_id=cell_id, scanned_at=""), "none"
+    try:
+        raw = DEFAULT_TABLE.read_text(encoding="utf-8")
+        return _load(raw, cell_id), "default_table"
+    except (OSError, SchemaError):
+        # best-effort rung: a broken or foreign default file is not the
+        # requester's fault - fall through to the empty robot
+        return RegIOTable(cell_id=cell_id, scanned_at=""), "none"

@@ -1,4 +1,4 @@
-"""Regression tests for the design-conformance audit fixes (group A)."""
+﻿"""Regression tests for the design-conformance audit fixes (group A)."""
 import json
 from types import SimpleNamespace
 
@@ -9,8 +9,7 @@ from tests.mock_supabase import MockSupabase
 from tpagent.contract import Request
 from tpagent.runtime import handle
 from tpagent.steps import StepsRecorder
-from tpagent.stores.seed import seed
-from tpagent.stores.table import cache_scan, materialize
+from tpagent.stores.table import materialize
 
 CSV = (FIXTURES / "reg_io_v1_template.csv").read_text(encoding="utf-8")
 CHUNK = SimpleNamespace(text="## L - linear motion\nSyntax: L <P[i]> ...")
@@ -24,7 +23,6 @@ def env(monkeypatch):
                                   "tests/fixtures/llm1_audit.json")
     monkeypatch.setenv("TP_LLM2", "mock:tests/fixtures/v2.ls")
     mock = MockSupabase()
-    seed("line3_fanuc1", FIXTURES / "reg_io_v1_template.csv", client=mock)
     yield mock
 
 
@@ -34,7 +32,8 @@ class TestScanLevelA:                                   # audit A1 + A2
                               cell_id="line3_fanuc1",
                               scan="not,a,real\ncsv,at,all"), sb_client=env)
         assert resp.status == "rejected"
-        assert "reg_io_v1" in resp.reason and "ERR" not in resp.reason
+        assert "'type' and 'index'" in resp.reason
+        assert "ERR" not in resp.reason
 
     def test_cross_cell_scan_rejected(self, env):
         resp = handle(Request(prompt="pick and place",
@@ -277,7 +276,15 @@ class TestReauditFixes:
                               cell_id="line3_fanuc1", scan="   \n  "),
                       sb_client=env)
         assert resp.status == "ok"
-        assert resp.report.table_source.startswith("cache(")
+        assert resp.report.table_source == "default_table"
+
+    def test_bracket_in_position_label_gets_repairable_error(self):
+        from tpagent.validator import run
+        prog = ("/PROG T\n/MN\n"
+                "  1:  L PR[5:user pick PR[5]] 50mm/sec FINE ;\n/POS\n/END\n")
+        [err] = run(prog, None, {}).errors
+        assert err.layer == "grammar"
+        assert "label" in err.message and "brackets" in err.message
 
     def test_friendly_rag_backend_message(self):
         from tpagent.contract import validate_request
@@ -287,23 +294,6 @@ class TestReauditFixes:
         assert "online" in msg and "local" in msg
 
 
-class TestDerivedFieldsNotPersisted:                    # audit A8
-    def test_cache_row_has_no_derived_fields(self):
-        mock = MockSupabase()
-        cache_scan("line3_fanuc1", CSV, client=mock)
-        entry = mock.data["reg_io_tables"][0]["entries"]["entries"][0]
-        assert "category" not in entry and "direction" not in entry
-
-    def test_rehydrate_derives_even_from_tampered_row(self):
-        mock = MockSupabase()
-        cache_scan("line3_fanuc1", CSV, client=mock)
-        # simulate a corrupted row claiming a PR is an IO point
-        stored = mock.data["reg_io_tables"][0]["entries"]["entries"]
-        stored[0]["category"] = "IO"
-        stored[0]["direction"] = "out"
-        table, source = materialize("line3_fanuc1", None, client=mock,
-                                    config={"table":
-                                            {"max_table_age_hours": 1e9}})
-        assert source.startswith("cache(")
-        pr = table.find("PR", stored[0]["index"])
-        assert pr.category == "REG" and pr.direction is None
+# (TestDerivedFieldsNotPersisted removed with the cache itself - tables are
+# now parsed fresh per request from the upload or the bundled default file,
+# so no derived field is ever persisted anywhere.)

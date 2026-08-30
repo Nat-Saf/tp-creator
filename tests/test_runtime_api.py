@@ -1,4 +1,4 @@
-"""Phase 5 e2e: runtime.handle + POST /api/execute with mock LLMs.
+﻿"""Phase 5 e2e: runtime.handle + POST /api/execute with mock LLMs.
 
 TP_LLM1 serves scripted JSON actions in call order; TP_LLM2 serves
 v1.ls (two seeded errors) then v2.ls (clean) - so the loop must show
@@ -14,7 +14,6 @@ from tpagent.contract import Request
 from tpagent.runtime import handle
 from tpagent.steps import StepsRecorder
 from tpagent.stores import client as sb_client_mod
-from tpagent.stores.seed import seed
 
 
 @pytest.fixture()
@@ -28,7 +27,6 @@ def env(monkeypatch):
                                   "tests/fixtures/v2.ls")
     monkeypatch.setenv("DEMO_CELL", "line3_fanuc1")
     mock = MockSupabase()
-    seed("line3_fanuc1", FIXTURES / "reg_io_v1_template.csv", client=mock)
     sb_client_mod.use_client(mock)
     yield mock
     sb_client_mod.use_client(None)
@@ -43,7 +41,7 @@ class TestHandle:
         assert resp.status == "ok"
         assert "PR[6:conveyor approach]" in resp.program_ls
         assert resp.report.retries == 1
-        assert resp.report.table_source.startswith("cache(")
+        assert resp.report.table_source == "default_table"
         assert resp.report.mapping_confidence == "verified"
         assert resp.report.positions["PR[5]"] == "note 'conveyor pick'"
         assert any("approach" in a for a in resp.report.advisories)
@@ -162,7 +160,8 @@ class TestApiExecute:
         assert r.status_code == 200
         assert "text/html" in r.headers["content-type"]
         for marker in ("Run Agent", "New task", "textarea",
-                       "/api/execute", "Steps trace"):
+                       "/api/execute", "Steps trace",
+                       "Load registers/IO table"):
             assert marker in r.text, marker
 
     def test_transcript_prompt_passes_through(self, env):

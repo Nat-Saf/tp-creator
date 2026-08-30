@@ -1,4 +1,4 @@
-"""LLMClient tests: mock transport, mock backend, retries, steps discipline."""
+﻿"""LLMClient tests: mock transport, mock backend, retries, steps discipline."""
 import httpx
 import pytest
 
@@ -70,7 +70,7 @@ class TestScriptedFlow:
         import json
         payload = json.loads(requests[0].content)
         assert payload["temperature"] == 0
-        assert payload["max_tokens"] == 800          # llm1 cap in static_config
+        assert payload["max_tokens"] == 2000          # llm1 cap in static_config
         assert payload["model"] == "mini-1"
         assert requests[0].headers["authorization"] == "Bearer test-key"
         assert requests[0].url == "https://llmod.test/v1/chat/completions"
@@ -88,7 +88,7 @@ class TestScriptedFlow:
                     role="llm1")
         import json
         payload = json.loads(requests[0].content)
-        assert payload["max_completion_tokens"] == 800
+        assert payload["max_completion_tokens"] == 2000
         assert payload["reasoning_effort"] == "low"   # per-role: llm1=low
         assert "temperature" not in payload      # gpt-5 rejects temperature=0
         assert "max_tokens" not in payload

@@ -21,8 +21,11 @@ serverless.
 
 ## Try it
 
-Open the root URL, type a task, press **Run Agent**. The demo cell
-(`line3_fanuc1`) understands these pendant-note words:
+Open the root URL, type a task, press **Run Agent**. You can also **load
+your own registers/IO table** (a `.csv` - either the strict `reg_io_v1`
+export or a simple `type,index,comment` sheet saved as CSV) with the button
+above the prompt box; without one, the built-in default table is used. The
+default cell (`line3_fanuc1`) understands these pendant-note words:
 
 | Say... | Cell entity |
 |---|---|

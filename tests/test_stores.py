@@ -1,82 +1,97 @@
-﻿"""Offline stores tests against the record/replay mock supabase client."""
-from datetime import datetime, timedelta, timezone
-
+"""Offline stores tests: table sources (upload > default > none) + the
+Supabase-backed session/output stores against the record/replay mock."""
 import pytest
 
 from tests.conftest import FIXTURES
 from tests.mock_supabase import MockSupabase
 from tpagent.stores import output, session, table
-from tpagent.stores.seed import DEFAULT_CSV, seed, show_row
+from tpagent.stores.table import SchemaError, materialize, normalize_scan
 
 CSV_PATH = FIXTURES / "reg_io_v1_template.csv"
 CSV = CSV_PATH.read_text(encoding="utf-8")
 
-CFG = {"table": {"max_table_age_hours": 72}}
-
-
-def hours_ago(h: float) -> str:
-    return (datetime.now(timezone.utc) - timedelta(hours=h)).isoformat(
-        timespec="seconds")
+BARE = ("type,index,comment\n"
+        "PR,1,home\n"
+        'SR,2,"recipe name, active"\n'
+        "DO,7,green lamp\n")
 
 
 class TestMaterialize:
-    def test_scan_wins_and_persists_cache_row(self):
-        mock = MockSupabase()
-        t, source = table.materialize("line3_fanuc1", CSV, client=mock, config=CFG)
+    def test_uploaded_strict_scan_wins(self):
+        t, source = materialize("line3_fanuc1", CSV)
         assert source == "scan"
         assert len(t.entries) == 25 and len(t.flags) == 1
-        row = mock.data["reg_io_tables"][0]
-        assert row["cell_id"] == "line3_fanuc1" and row["source"] == "scan"
-        assert row["scanned_at"] == "2026-07-04T10:42:00"  # the CSV's own header
-        assert len(row["entries"]["entries"]) == 25
-        assert len(row["entries"]["flags"]) == 1
+        assert t.scanned_at == "2026-07-04T10:42:00"    # the CSV's own header
 
-    def test_fresh_cache_hit_round_trips_the_table(self):
-        mock = MockSupabase()
-        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(3), client=mock)
-        t, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
-        assert source == "cache(3h)"
-        assert len(t.entries) == 25 and len(t.flags) == 1
-        assert t.find("PR", 10).initialized is False        # bool round-trip
-        assert t.find("DI", 3).initialized is None
-        assert t.find("SR", 2).comment == "recipe name, active"
-        assert t.find("RO", 2).direction == "out"
+    def test_default_table_serves_when_no_scan(self):
+        t, source = materialize("line3_fanuc1", None)
+        assert source == "default_table"
+        assert len(t.entries) == 25
+        assert t.find("PR", 5).comment == "conveyor pick"
 
-    def test_minutes_age_format(self):
-        mock = MockSupabase()
-        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(0.5), client=mock)
-        _, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
-        assert source == "cache(30m)"
+    def test_blank_scan_falls_to_default(self):
+        _, source = materialize("line3_fanuc1", "   \n ")
+        assert source == "default_table"
 
-    def test_stale_cache_means_empty_robot(self):
-        mock = MockSupabase()
-        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(100), client=mock)
-        t, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
-        assert source == "none"
-        assert t.entries == [] and t.cell_id == "line3_fanuc1"
-
-    def test_unparseable_scanned_at_refuses_cache(self):
-        mock = MockSupabase()
-        table.cache_scan("line3_fanuc1", CSV, scanned_at="not-a-date", client=mock)
-        _, source = table.materialize("line3_fanuc1", None, client=mock, config=CFG)
-        assert source == "none"
-
-    def test_no_source_returns_empty_robot(self):
-        t, source = table.materialize("empty_cell", None,
-                                      client=MockSupabase(), config=CFG)
+    def test_foreign_cell_gets_empty_robot_from_default(self):
+        # the strict default file names line3_fanuc1; other cells get none
+        t, source = materialize("another_cell", None)
         assert source == "none" and t.entries == []
 
-    def test_scan_for_other_cell_does_not_leak(self):
-        mock = MockSupabase()
-        table.cache_scan("line3_fanuc1", CSV, scanned_at=hours_ago(1),
-                         client=mock)
-        _, source = table.materialize("cellB", None, client=mock, config=CFG)
+    def test_missing_default_file_means_empty_robot(self, monkeypatch,
+                                                    tmp_path):
+        monkeypatch.setattr(table, "DEFAULT_TABLE", tmp_path / "nope.csv")
+        t, source = materialize("line3_fanuc1", None)
+        assert source == "none" and t.entries == []
+
+    def test_broken_default_file_means_empty_robot(self, monkeypatch,
+                                                   tmp_path):
+        bad = tmp_path / "default.csv"
+        bad.write_text("just,garbage\n1,2\n", encoding="utf-8")
+        monkeypatch.setattr(table, "DEFAULT_TABLE", bad)
+        _, source = materialize("line3_fanuc1", None)
         assert source == "none"
 
-    def test_cache_scan_rejects_foreign_cell_csv(self):
-        from tpagent.stores.table import SchemaError
+    def test_cross_cell_strict_upload_rejected(self):
         with pytest.raises(SchemaError, match="another_cell"):
-            table.cache_scan("another_cell", CSV, client=MockSupabase())
+            materialize("another_cell", CSV)
+
+
+class TestNormalization:
+    def test_strict_file_passes_verbatim(self):
+        assert normalize_scan(CSV, "line3_fanuc1") == CSV
+
+    def test_bare_csv_uploads_as_scan(self):
+        t, source = materialize("line3_fanuc1", BARE)
+        assert source == "scan"
+        assert t.cell_id == "line3_fanuc1"              # synthesized meta
+        assert t.find("PR", 1).comment == "home"
+        assert t.find("PR", 1).initialized is True      # padded TRUE
+        assert t.find("SR", 2).comment == "recipe name, active"
+        assert t.find("DO", 7).direction == "out"
+
+    def test_ragged_rows_padded(self):
+        t, _ = materialize("c1", "type,index,comment\nPR,3\nR,1,counter\n")
+        assert t.find("PR", 3).comment == ""
+        assert t.find("R", 1).comment == "counter"
+
+    def test_full_bare_header_kept(self):
+        bare = ("type,index,comment,initialized,value\n"
+                "PR,9,fixture B,FALSE,\n")
+        t, _ = materialize("c1", bare)
+        assert t.find("PR", 9).initialized is False     # not padded over
+
+    def test_missing_type_or_index_rejected_friendly(self):
+        with pytest.raises(SchemaError, match="'type' and 'index'"):
+            materialize("c1", "name,pos\nfoo,1\n")
+
+    def test_blank_upload_is_no_scan_but_empty_normalize_rejects(self):
+        # materialize treats whitespace-only as "no scan sent"...
+        _, source = materialize("another_cell", "\n  \n")
+        assert source == "none"
+        # ...while the normalizer itself names the empty-file problem
+        with pytest.raises(SchemaError, match="empty"):
+            normalize_scan("\n  \n", "c1")
 
 
 class TestSession:
@@ -140,32 +155,3 @@ class TestOutput:
         assert row["program_name"] == "PICK_PLACE"
         assert row["report"] == {"retries": 1}
         assert output.load("nope", client=mock) is None
-
-
-class TestSeed:
-    def test_seed_writes_fresh_demo_row(self):
-        mock = MockSupabase()
-        row = seed("line3_fanuc1", CSV_PATH, client=mock)
-        assert row["cell_id"] == "line3_fanuc1" and row["source"] == "seed"
-        age = datetime.now(timezone.utc) - datetime.fromisoformat(row["scanned_at"])
-        assert age < timedelta(minutes=5)       # stamped at delivery time
-        assert len(row["entries"]["entries"]) == 25
-
-    def test_seeded_row_materializes_as_fresh_cache(self):
-        mock = MockSupabase()
-        seed("line3_fanuc1", CSV_PATH, client=mock)
-        t, source = table.materialize("line3_fanuc1", None,
-                                      client=mock, config=CFG)
-        assert source == "cache(0m)"
-        assert len(t.entries) == 25
-
-    def test_default_csv_is_the_canonical_fixture(self):
-        assert DEFAULT_CSV == CSV_PATH
-
-    def test_show_row_summary(self):
-        mock = MockSupabase()
-        seed("line3_fanuc1", CSV_PATH, client=mock)
-        text = show_row("line3_fanuc1", client=mock)
-        assert "line3_fanuc1" in text and "entries:    25" in text
-        assert "PR[1] home" in text
-        assert show_row("ghost", client=mock).startswith("no row")

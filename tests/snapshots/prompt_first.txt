@@ -31,6 +31,8 @@ Hard rules:
 - WAIT forms: "WAIT 1.00(sec)" or "WAIT DI[3]=ON TIMEOUT,LBL[10]". No other
   wait spelling exists.
 - IF uses a single "=", e.g. "IF DI[3]=ON,JMP LBL[10]".
+- Position labels (the text after ":" in P[i:...]/PR[i:...]) are plain
+  words only - never brackets or special characters: PR[5:pick point].
 - Keep /ATTR to OWNER and COMMENT only. Never invent instructions (no
   TOOL[...], no $-variable SET lines).
 - Use FINE at contact points and on the final move; CNT for travel.

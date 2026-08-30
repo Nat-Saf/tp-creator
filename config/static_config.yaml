@@ -14,14 +14,13 @@ retry:
   max_attempts: 3
 llm:
   max_tokens:               # per-role caps (course budget rules)
-    llm1: 800
+    llm1: 2000              # gpt-5 counts hidden reasoning inside this cap;
+                            # 800 starved planning to 0 content (probed live)
     llm2: 3000              # a full program + headers; 1600 truncated live
   reasoning_effort:         # gpt-5 family only; caps hidden reasoning spend
     llm1: low               # planning/policy adherence needs some thought
     llm2: minimal           # codegen follows the rendered prompt
-table:
-  max_table_age_hours: 72   # cache freshness bound (DESIGN.md 2c)
-# No default_index_map (owner decision, 2026-08-29): without a scan/cache the
-# robot is treated as EMPTY - any register/IO index is usable; the agent takes
-# indexes the user names, else allocates sequentially from the lowest. The
-# validator skips existence checks in that mode; grammar + limits still run.
+# Table policy (owner decision, 2026-08-30): NO cache, no staleness window.
+# Table = the CSV uploaded with the request, else config/default_table.csv,
+# else the robot is treated as EMPTY - any register/IO index is usable (the
+# validator skips existence checks in that mode; grammar + limits still run).

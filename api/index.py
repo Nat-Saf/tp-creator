@@ -102,6 +102,7 @@ def agent_info() -> dict:
 
 class ExecuteBody(BaseModel):
     prompt: str
+    scan: str | None = None     # optional registers/IO table CSV (GUI upload)
 
 
 def _report_summary(report) -> str:
@@ -126,7 +127,7 @@ def execute(body: ExecuteBody) -> dict:
     recorder = StepsRecorder()
     config.load_dotenv()
     try:
-        req = Request(prompt=body.prompt,
+        req = Request(prompt=body.prompt, scan=body.scan,
                       cell_id=os.environ.get("DEMO_CELL", "line3_fanuc1"))
         resp = runtime.handle(
             req, recorder=recorder,

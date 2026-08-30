@@ -13,7 +13,6 @@ import uuid
 from dataclasses import dataclass, field
 
 PRIMARY_KEYS = {
-    "reg_io_tables": "cell_id",
     "sessions": "id",
     "drafts": "id",
     "verdicts": "draft_id",

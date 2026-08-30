@@ -44,6 +44,15 @@
               background: #fff; border-top: 1px solid #e2e5e9;
               padding: 10px 0; }
   #composer .wrap { display: flex; gap: 8px; align-items: flex-end; }
+  #tablebar { max-width: 880px; margin: 0 auto 6px; padding: 0 16px;
+              display: flex; gap: 8px; align-items: center;
+              font-size: .82rem; color: #6a737d; }
+  #loadtable { background: #eef0f2; padding: 6px 10px; font-size: .82rem; }
+  #tablechip { display: none; background: #e7f5ec; border: 1px solid
+               #b8e0c5; color: #1a7f37; border-radius: 999px;
+               padding: 3px 10px; font-weight: 600; }
+  #tablechip button { background: none; border: 0; color: #1a7f37;
+                      padding: 0 0 0 6px; font-weight: 700; }
   textarea { flex: 1; resize: none; min-height: 52px; max-height: 140px;
              border: 1px solid #c9ced4; border-radius: 8px; padding: 10px;
              font: inherit; }
@@ -70,7 +79,14 @@
      gently&rdquo; &mdash; then press Run Agent.</p>
 </main>
 
-<div id="composer"><div class="wrap">
+<div id="composer">
+<div id="tablebar">
+  <button id="loadtable" title="Load a registers/IO table for your cell">Load registers/IO table (.csv)</button>
+  <span id="tablechip"><span id="tablename"></span><button id="cleartable" title="Remove the loaded table">&times;</button></span>
+  <span id="tablemsg"></span>
+  <input type="file" id="tablefile" accept=".csv,text/csv" hidden>
+</div>
+<div class="wrap">
   <textarea id="prompt" placeholder="Describe the task, or answer my question&hellip; (Ctrl+Enter runs)"></textarea>
   <button id="run">Run Agent</button>
   <button id="newtask" title="Forget this conversation">New task</button>
@@ -84,6 +100,7 @@ const runBtn = document.getElementById("run");
 const hint = document.getElementById("hint");
 let turns = [];          // committed transcript: {role, text}
 let busy = false;
+let tableCsv = null;     // loaded registers/IO table, resent every call
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -166,10 +183,12 @@ async function run() {
       Math.round((Date.now() - t0) / 1000) + "s";
   }, 1000);
   try {
+    const payload = { prompt: transcriptWith(text) };
+    if (tableCsv) payload.scan = tableCsv;
     const r = await fetch("/api/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: transcriptWith(text) })
+      body: JSON.stringify(payload)
     });
     const data = await r.json();
     status.remove();
@@ -202,6 +221,38 @@ document.getElementById("newtask").addEventListener("click", function () {
   hint.style.display = "";
   promptBox.value = "";
   promptBox.focus();
+  // the loaded table is cell state, not conversation state - it stays
+});
+
+const tableFile = document.getElementById("tablefile");
+const tableChip = document.getElementById("tablechip");
+const tableMsg = document.getElementById("tablemsg");
+document.getElementById("loadtable").addEventListener("click", function () {
+  tableFile.click();
+});
+tableFile.addEventListener("change", function () {
+  const f = tableFile.files[0];
+  tableFile.value = "";
+  if (!f) return;
+  tableMsg.textContent = "";
+  if (/\.xlsx?$/i.test(f.name)) {
+    tableMsg.textContent =
+      "Excel files aren't supported directly - please save the sheet as " +
+      "CSV first (File → Save As → CSV).";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function () {
+    tableCsv = String(reader.result);
+    document.getElementById("tablename").textContent = "table: " + f.name;
+    tableChip.style.display = "inline-block";
+  };
+  reader.readAsText(f);
+});
+document.getElementById("cleartable").addEventListener("click", function () {
+  tableCsv = null;
+  tableChip.style.display = "none";
+  tableMsg.textContent = "";
 });
 promptBox.focus();
 </script>

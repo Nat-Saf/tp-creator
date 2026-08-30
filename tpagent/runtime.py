@@ -66,10 +66,9 @@ def _mandatory_advisories(source: str) -> list[str]:
         return ["No register and IO map is loaded for this cell, so I chose "
                 "the register and IO indexes myself - please review the "
                 "mapping before running the program."]
-    if source.startswith("cache"):
-        age = source[source.find("(") + 1:source.find(")")]
-        return [f"The register map comes from a scan cached {age} ago - "
-                f"re-scan if the cell has changed since."]
+    if source == "default_table":
+        return ["I used the built-in cell table - load your own registers "
+                "and IO file on the page if your cell differs."]
     return []
 
 
@@ -109,8 +108,7 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
     max_attempts = int((cfg.get("retry") or {}).get("max_attempts", 3))
 
     try:
-        table, source = table_store.materialize(req.cell_id, req.scan,
-                                                client=sb_client)
+        table, source = table_store.materialize(req.cell_id, req.scan)
     except SchemaError as e:                # bad scan = level-A reject (2b)
         return Response(status="rejected", reason=str(e))
 
@@ -245,7 +243,11 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 program = draft.text
                 break
 
-            sig = tuple(sorted({e.layer for e in verdict.errors}))
+            # same-error-class signature: layer + the concrete offender, so
+            # partial progress (one existence error fixed, one left) resets
+            # the streak while a genuinely stuck error still stops the run
+            sig = tuple(sorted({(e.layer, e.ref or e.found or e.message
+                                 or "") for e in verdict.errors}))
             same_class_streak = same_class_streak + 1 if sig == last_sig \
                 else 1
             last_sig = sig

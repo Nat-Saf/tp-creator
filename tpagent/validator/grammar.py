@@ -91,12 +91,27 @@ class Cursor:
 
 # ---------------------------------------------------------------- walkers
 
+def _bracket_label_err(c: Cursor) -> list[Err] | None:
+    # a label like PR[5:user pick PR[5]] leaves a dangling "]" here; say
+    # what actually went wrong instead of "expected <speed>"
+    if c.eat(r"\]"):
+        return [Err(layer="grammar", line=c.line_no,
+                    message="A position label can't contain brackets - "
+                            "use plain words after the ':', e.g. "
+                            "PR[5:pick point].")]
+    return None
+
+
 def walk_motion(c: Cursor, mtype: str) -> list[Err]:
     c.eat(mtype)
     if not c.eat(POINT):
         return [c.err({"P[i]", "PR[i]"})]
+    if (err := _bracket_label_err(c)) is not None:
+        return err
     if mtype == "C" and not c.eat(POINT):
         return [c.err({"P[i] (via point then destination)"})]
+    if mtype == "C" and (err := _bracket_label_err(c)) is not None:
+        return err
     units = MOTION_UNITS[mtype]
     m = c.eat(r"(" + NUM + r"|" + REF.format(types=r"R") + r")"
               + r"(" + "|".join(re.escape(u) for u in sorted(units, key=len, reverse=True)) + r")(?=\s|$)")

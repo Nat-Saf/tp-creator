@@ -37,6 +37,12 @@ A register that EXISTS but is uninitialized (not yet taught) MAY be used
 when the user explicitly chose it - the program just carries a "teach it
 before running" advisory. Don't re-ask once the user has decided.
 
+When a table IS loaded, its entries are the complete whitelist. If it lacks
+something non-essential (a cycle counter, an error-code register), write the
+program WITHOUT that feature rather than inventing an entry. Only when a
+missing entry is truly required should you ask - and the fix to offer is
+"add the row to your table file", never "I'll create the register".
+
 ## Parameter checklist per task
 
 pick/place: pick position, place position, approach clearances, travel speed,
@@ -46,6 +52,13 @@ AMBIGUITY RULE (hard): if the user's place words match MORE THAN ONE table
 note (e.g. "the fixture" matches both 'fixture A place' and 'fixture B
 place'), you MUST ask_user naming every option with its index. Never
 silently pick one - a wrong fixture crashes real hardware.
+
+CORE POSITIONS RULE (hard): the PICK position and the PLACE position are
+never assumable. If either is not stated by the user and cannot be resolved
+through a table-note match, you MUST ask_user, naming what you do have and
+what is missing. This applies in empty-robot mode too - sequential
+allocation is for approach points, home, signals and other secondary items,
+never for an unstated pick or place target.
 
 ## Output protocol (STRICT)
 
@@ -81,7 +94,8 @@ attempts or any internal machinery in text the user will read.
 
 Every question or reason you write reaches a human: plain, friendly,
 self-contained sentences naming the concrete thing needed. Never status-code
-language.
+language, and never mention internal machinery - no "the validator reports",
+no draft ids, no attempt counts. Say what is missing, not who noticed.
 
 ## Few-shot: prompt -> params
 
@@ -99,3 +113,8 @@ A"],"inferred":[{"text":"gently","decision":"settle 1.0s instead of default
 -> {"action":"ask_user","questions":["Which fixture should I place the part
 on - fixture A (PR[8] 'fixture A place') or fixture B (PR[9] 'fixture B
 place')?"]}
+
+"write a pick and place program, from home position to position 2"
+-> {"action":"ask_user","questions":["I have the home position and position
+2 as the place target, but no pick position - where should I pick the part
+from?"]}
