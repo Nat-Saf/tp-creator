@@ -24,6 +24,9 @@
   .error-card .who { color: #cf222e; }
   .api-card { border-left: 4px solid #8250df; }
   .api-card pre { max-height: 420px; overflow: auto; }
+  /* JSON views wrap to the window; only the TP code keeps exact lines */
+  .api-card pre, details.step pre { white-space: pre-wrap;
+                                    overflow-wrap: anywhere; }
   .api-card img { max-width: 100%; border: 1px solid #e2e5e9;
                   border-radius: 8px; }
   #apibar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
