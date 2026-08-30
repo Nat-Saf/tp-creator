@@ -25,7 +25,7 @@ from tpagent.config import ROOT
 PNG = ROOT / "docs" / "architecture.png"
 MANIFEST = ROOT / "docs" / "architecture.json"
 
-W, H = 1360, 1700
+W, H = 1360, 1750
 BG = (247, 248, 250)
 BOX = (255, 255, 255)
 EDGE = (55, 65, 81)
@@ -327,6 +327,11 @@ def generate() -> None:
     out = _box(d, 700, 1570, 500, 100, "Validated .ls + report",
                "exact course shape out", fill=GREEN)
     _arrow(d, aud, out)
+
+    d.text((80, 1682),
+           "Each numbered step (1-10) is explained in the information "
+           "endpoint: GET /api/agent_info -> how_it_works.flow",
+           font=F_SMALL, fill=TEXT)
 
     PNG.parent.mkdir(exist_ok=True)
     img.save(PNG)
