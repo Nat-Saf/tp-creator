@@ -54,6 +54,7 @@ F_TITLE = _font(30, bold=True)
 F_BOX = _font(22, bold=True)
 F_SMALL = _font(16)
 F_STEP = _font(15, bold=True)
+F_NOTE = _font(21, bold=True)
 
 # ---------------------------------------------------------------- the story
 # GET /api/agent_info serves these verbatim (via the JSON manifest); the
@@ -328,10 +329,10 @@ def generate() -> None:
                "exact course shape out", fill=GREEN)
     _arrow(d, aud, out)
 
-    d.text((80, 1682),
+    d.text((80, 1678),
            "Each numbered step (1-10) is explained in the information "
            "endpoint: GET /api/agent_info -> how_it_works.flow",
-           font=F_SMALL, fill=TEXT)
+           font=F_NOTE, fill=ACCENT)
 
     PNG.parent.mkdir(exist_ok=True)
     img.save(PNG)

@@ -12,20 +12,75 @@ audit adds human-review advisories, and every model call is traced in the
 
 ![Agent architecture](docs/architecture.png)
 
-The diagram is the **agent architecture** - the Design Document's Figure-1
-view of the deployed system, with badges ① - ⑩ marking the flow.
-The main idea: one deterministic machine, two narrow AI roles. **LLM1**
-(Intake/Audit) exists because human words are ambiguous - it is the only
-component allowed to interpret them, deciding per gap whether to use a
-default, infer, or ask; the **Runtime** (no AI) owns the mechanics models
-can't be trusted with: retry budgets, every draft → Validator, every pass
-→ LLM1-Audit, mandatory retrieval and the stop rules. **LLM2-Codegen**
-writes the code in a fresh context from a deterministically rendered
-prompt. `GET /api/agent_info` serves this same story as text: the intro
-plus the numbered flow. **RAG-Embed** runs offline to index our own-words
-TP syntax notes (`corpus/prepared/`) into Pinecone; **RAG-Retrieve**
-queries them before every first draft. All state lives in Supabase - the
-deployment is fully serverless.
+The main idea: **one deterministic machine, two narrow AI roles**. LLM #1
+(the LLM1-Intake / LLM1-Audit roles) exists because human words are
+ambiguous - it is the only component allowed to interpret them, deciding
+per gap whether to use a default, infer with a note, or ask; the
+**Runtime** (no AI) owns the mechanics models can't be trusted with:
+retry budgets, every draft → Validator, every pass → LLM1-Audit,
+mandatory retrieval and the stop rules. **LLM2-Codegen** writes the code
+in a fresh context from a deterministically rendered prompt. All state
+lives in Supabase - the deployment is fully serverless. `GET
+/api/agent_info` serves this same story as JSON: the intro plus the
+numbered flow below.
+
+## How it works - the flow (badges ①-⑩ in the diagram)
+
+1. **Request in** - the GUI sends the whole conversation transcript as
+   the prompt (plus the optional table CSV). The adapter builds the
+   request and the Runtime runs the mechanical level-A checks before any
+   model is involved.
+2. **Table materialized** - the Stores layer resolves the cell's table:
+   an uploaded CSV wins (bare `type,index,...` files get the reg_io_v1
+   metadata synthesized), else the bundled `config/default_table.csv`,
+   else the robot is treated as empty and any index is usable. A session
+   row opens in Supabase.
+3. **Intake** - LLM1-Intake maps the user's words to real registers and
+   IO through their pendant notes and applies the gap policy: use a
+   default, infer with a note, or ask. On an explicit user request
+   ("add PR[2]") it may add a NEW entry to the working table - existing
+   rows are never overridden, and the new entry starts untaught.
+4. **Retrieval** - the Runtime always fetches TP-syntax documentation
+   before the first draft (RAG-Retrieve over the Pinecone index that
+   RAG-Embed built offline from our own-words notes in
+   `corpus/prepared/`). Chunks go to the Renderer only - never through
+   LLM1-Intake's context.
+5. **Params out** - LLM1-Intake invokes the generate_program tool:
+   parameters, program name, notes, plus fix guidance on retries. Task
+   and notes are pinned to the first attempt, so a retry differs only in
+   what is being fixed.
+6. **Prompt and draft** - the Renderer deterministically assembles the
+   LLM2-Codegen prompt from fixed sections (canonical skeleton, cell,
+   docs, task, notes, previous draft + fix). It takes the table and
+   config from the stores, never from LLM #1's output (no-leakage).
+   LLM2-Codegen writes the TP draft in a fresh context.
+7. **Validation** - every draft passes the deterministic three-layer
+   Validator: grammar token walks, existence against the table (skipped
+   for an empty robot; an existing-but-untaught register is a warning,
+   not an error), and safety limits with every speed unit converted or
+   refused.
+8. **Errors back** - a failing verdict returns to LLM1-Intake for
+   diagnosis and a bounded retry: at most three drafts, and a third
+   consecutive failure of the same layer and offender ends the run
+   mechanically.
+9. **Audit - always** - every passing program is reviewed by LLM1-Audit
+   for mapping and intent correctness, with the effective defaults in
+   hand. Advisory only - findings never block delivery.
+10. **Store and respond** - outputs and the full report persist to
+    Supabase; the adapter maps the result to the exact course shape
+    `{status, error, response, steps}`, and the steps recorder
+    guarantees every model call appears in the trace, in order.
+
+### Table sources
+
+The bundled default table lives at `config/default_table.csv` in this
+repo and ships with every deployment; updating it means editing that
+file and pushing (locally the change is picked up automatically). It is
+resolved fresh on **every** request: a table loaded in the GUI wins for
+as long as it stays loaded (it survives "New task", not a page reload);
+without one, every new session starts from the default table again.
+Entries added mid-conversation with "add PR[2]" live only in that
+conversation - nothing is ever written back to a table file.
 
 ## Try it
 
@@ -56,9 +111,12 @@ Example prompts:
 3. `create a pick and place program with a middle stop that triggers the
    camera on the green lamp output for 1 second`
 
-Each answer shows the report (table source, inferences, safety advisories)
-above the program, plus the collapsible **steps trace** - every model call
-with its module name, prompt and response.
+Each delivered program shows the TP code with a **Save program (.ls)**
+button, a folded **Report & advisories** section (table source,
+inferences, safety advisories) and the collapsible **steps trace** -
+every model call with its module name, prompt and response. Enter runs
+the agent (Shift+Enter for a new line), and the buttons at the top of
+the page show the live responses of every API endpoint.
 
 ## API
 

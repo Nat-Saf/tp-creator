@@ -83,7 +83,10 @@
   #run { background: #2f6feb; color: #fff; min-width: 110px; }
   #run:disabled { background: #9db7ee; cursor: wait; }
   #newtask { background: #eef0f2; color: #1c2128; }
-  #hint { text-align: center; color: #6a737d; margin-top: 40px; }
+  #hint { text-align: center; color: #6a737d; margin-top: 40px;
+          max-width: 640px; margin-left: auto; margin-right: auto; }
+  #hint p { margin: 0 0 12px; }
+  #hint p:first-child { color: #1c2128; font-weight: 600; }
   .running { color: #6a737d; font-size: .88rem; }
 </style>
 </head>
@@ -104,9 +107,21 @@
 
 <main class="wrap">
   <div id="conversation"></div>
-  <p id="hint">Describe the program you need &mdash; e.g.
-     &ldquo;pick a part from the conveyor and put it on fixture A,
-     gently&rdquo; &mdash; then press Run Agent.</p>
+  <div id="hint">
+    <p>Describe the program you need &mdash; e.g.
+       &ldquo;pick a part from the conveyor and put it on fixture A,
+       gently&rdquo; &mdash; then press Run Agent (or just Enter).</p>
+    <p>You can load your own registers/IO table (.csv) with the button
+       below &mdash; without one, the built-in cell table is used.</p>
+    <p>If something is missing I&rsquo;ll ask a question &mdash; answer in
+       the same box, the whole conversation stays my context.</p>
+    <p>Need an index that isn&rsquo;t in the table? Say &ldquo;add
+       PR[2]&rdquo; and I&rsquo;ll add it as a new entry &mdash; existing
+       rows are never changed.</p>
+    <p>Every delivered program comes with a Save (.ls) button, a folded
+       report with safety advisories, and the full steps trace. The
+       buttons at the top show the live API endpoint responses.</p>
+  </div>
 </main>
 
 <div id="composer">
