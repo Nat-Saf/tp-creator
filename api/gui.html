@@ -33,6 +33,8 @@
                padding: 6px 14px; font-size: .82rem; font-weight: 600;
                color: #1c2128; }
   button.api:hover { border-color: #2f6feb; color: #2f6feb; }
+  button.api.active { border-color: #2f6feb; color: #2f6feb;
+                      background: #eef4ff; }
   .report { background: #f0f6ff; border: 1px solid #d0e0f7; border-radius: 8px;
             padding: 10px 12px; margin-bottom: 10px; font-size: .88rem;
             white-space: pre-wrap; }
@@ -240,6 +242,10 @@ promptBox.addEventListener("keydown", function (e) {
 document.getElementById("newtask").addEventListener("click", function () {
   turns = [];
   apiCard = null;        // its node goes with the conversation
+  apiCardKey = null;
+  document.querySelectorAll("button.api.active").forEach(function (b) {
+    b.classList.remove("active");
+  });
   conversation.textContent = "";
   hint.style.display = "";
   promptBox.value = "";
@@ -279,39 +285,62 @@ document.getElementById("cleartable").addEventListener("click", function () {
 });
 
 let apiCard = null;      // one endpoint response shown at a time
-document.querySelectorAll("button.api").forEach(function (btn) {
-  btn.addEventListener("click", async function () {
+let apiCardKey = null;   // which button opened it - 2nd push closes it
+
+function toggleApiCard(key, title, build) {
+  document.querySelectorAll("button.api.active").forEach(function (b) {
+    b.classList.remove("active");
+  });
+  if (apiCard) {
+    apiCard.remove();
+    apiCard = null;
+    const closing = apiCardKey === key;
+    apiCardKey = null;
+    if (closing) return;               // same button again: just close
+  }
+  apiCard = card("api", title);
+  apiCardKey = key;
+  const btn = document.getElementById(key) ||
+              document.querySelector('button.api[data-ep="' + key + '"]');
+  if (btn) btn.classList.add("active");
+  build(apiCard);
+  scrollDown();
+}
+
+document.querySelectorAll("button.api[data-ep]").forEach(function (btn) {
+  btn.addEventListener("click", function () {
     const ep = btn.dataset.ep;
-    if (apiCard) apiCard.remove();
-    const c = apiCard = card("api", "GET " + ep);
-    try {
-      if (btn.dataset.kind === "png") {
-        const img = document.createElement("img");
-        img.src = ep + "?t=" + Date.now();   // dodge the browser cache
-        img.alt = "agent architecture diagram";
-        img.onload = scrollDown;
-        c.appendChild(img);
-      } else {
-        const r = await fetch(ep);
-        c.appendChild(el("pre", "", JSON.stringify(await r.json(), null, 2)));
+    toggleApiCard(ep, "GET " + ep, async function (c) {
+      try {
+        if (btn.dataset.kind === "png") {
+          const img = document.createElement("img");
+          img.src = ep + "?t=" + Date.now();   // dodge the browser cache
+          img.alt = "agent architecture diagram";
+          img.onload = scrollDown;
+          c.appendChild(img);
+        } else {
+          const r = await fetch(ep);
+          c.appendChild(el("pre", "",
+                           JSON.stringify(await r.json(), null, 2)));
+        }
+      } catch (err) {
+        c.appendChild(el("div", "msg",
+                         "The endpoint could not be reached."));
       }
-    } catch (err) {
-      c.appendChild(el("div", "msg", "The endpoint could not be reached."));
-    }
-    scrollDown();
+      scrollDown();
+    });
   });
 });
 document.getElementById("rawexec").addEventListener("click", function () {
-  if (apiCard) apiCard.remove();
-  const c = apiCard = card("api", "POST /api/execute - raw response");
-  if (lastExecute) {
-    c.appendChild(el("pre", "", JSON.stringify(lastExecute, null, 2)));
-  } else {
-    c.appendChild(el("div", "msg",
-      "No run yet - press Run Agent first, then this button shows the " +
-      "raw JSON the endpoint returned."));
-  }
-  scrollDown();
+  toggleApiCard("rawexec", "POST /api/execute - raw response", function (c) {
+    if (lastExecute) {
+      c.appendChild(el("pre", "", JSON.stringify(lastExecute, null, 2)));
+    } else {
+      c.appendChild(el("div", "msg",
+        "No run yet - press Run Agent first, then this button shows the " +
+        "raw JSON the endpoint returned."));
+    }
+  });
 });
 
 // keep the conversation clear of the fixed composer, whatever its height
