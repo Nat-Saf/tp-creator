@@ -13,7 +13,7 @@
   header .wrap { display: flex; align-items: baseline; gap: 12px; }
   h1 { font-size: 1.15rem; font-weight: 650; }
   header span { color: #8b949e; font-size: .82rem; }
-  main { padding: 18px 0 90px; }
+  main { padding: 18px 0 170px; }  /* bottom set live to the composer height */
   .card { background: #fff; border: 1px solid #e2e5e9; border-radius: 10px;
           padding: 14px 16px; margin: 0 0 12px; }
   .who { font-size: .72rem; font-weight: 700; letter-spacing: .06em;
@@ -29,9 +29,10 @@
   #apibar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
             padding: 12px 16px 0; max-width: 880px; margin: 0 auto;
             font-size: .82rem; color: #6a737d; }
-  button.api { background: #eef0f2; padding: 6px 10px; font-size: .8rem;
-               font-weight: 600; font-family: ui-monospace, Consolas,
-               monospace; }
+  button.api { background: #fff; border: 1px solid #c9ced4;
+               padding: 6px 14px; font-size: .82rem; font-weight: 600;
+               color: #1c2128; }
+  button.api:hover { border-color: #2f6feb; color: #2f6feb; }
   .report { background: #f0f6ff; border: 1px solid #d0e0f7; border-radius: 8px;
             padding: 10px 12px; margin-bottom: 10px; font-size: .88rem;
             white-space: pre-wrap; }
@@ -84,11 +85,11 @@
 
 <div id="apibar">
   <span>Endpoints:</span>
-  <button class="api" data-ep="/api/team_info">GET /api/team_info</button>
-  <button class="api" data-ep="/api/health">GET /api/health</button>
-  <button class="api" data-ep="/api/agent_info">GET /api/agent_info</button>
-  <button class="api" data-ep="/api/model_architecture" data-kind="png">GET /api/model_architecture</button>
-  <span title="The Run Agent button below posts to it">POST /api/execute &rarr; Run Agent</span>
+  <button class="api" data-ep="/api/team_info" title="GET /api/team_info">Team info</button>
+  <button class="api" data-ep="/api/health" title="GET /api/health">Health</button>
+  <button class="api" data-ep="/api/agent_info" title="GET /api/agent_info">Agent info</button>
+  <button class="api" data-ep="/api/model_architecture" data-kind="png" title="GET /api/model_architecture">Architecture</button>
+  <span title="POST /api/execute">Run Agent below &rarr; POST /api/execute</span>
 </div>
 
 <main class="wrap">
@@ -106,7 +107,7 @@
   <input type="file" id="tablefile" accept=".csv,text/csv" hidden>
 </div>
 <div class="wrap">
-  <textarea id="prompt" placeholder="Describe the task, or answer my question&hellip; (Ctrl+Enter runs)"></textarea>
+  <textarea id="prompt" placeholder="Describe the task, or answer my question&hellip; (Enter runs, Shift+Enter = new line)"></textarea>
   <button id="run">Run Agent</button>
   <button id="newtask" title="Forget this conversation">New task</button>
 </div></div>
@@ -232,10 +233,11 @@ async function run() {
 
 runBtn.addEventListener("click", run);
 promptBox.addEventListener("keydown", function (e) {
-  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); run(); }
 });
 document.getElementById("newtask").addEventListener("click", function () {
   turns = [];
+  apiCard = null;        // its node goes with the conversation
   conversation.textContent = "";
   hint.style.display = "";
   promptBox.value = "";
@@ -274,10 +276,12 @@ document.getElementById("cleartable").addEventListener("click", function () {
   tableMsg.textContent = "";
 });
 
+let apiCard = null;      // one endpoint response shown at a time
 document.querySelectorAll("button.api").forEach(function (btn) {
   btn.addEventListener("click", async function () {
     const ep = btn.dataset.ep;
-    const c = card("api", "GET " + ep);
+    if (apiCard) apiCard.remove();
+    const c = apiCard = card("api", "GET " + ep);
     try {
       if (btn.dataset.kind === "png") {
         const img = document.createElement("img");
@@ -295,6 +299,14 @@ document.querySelectorAll("button.api").forEach(function (btn) {
     scrollDown();
   });
 });
+// keep the conversation clear of the fixed composer, whatever its height
+const composerEl = document.getElementById("composer");
+const mainEl = document.querySelector("main");
+function padForComposer() {
+  mainEl.style.paddingBottom = (composerEl.offsetHeight + 24) + "px";
+}
+new ResizeObserver(padForComposer).observe(composerEl);
+padForComposer();
 promptBox.focus();
 </script>
 </body>
