@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -427,7 +427,7 @@ function applyTheme(mode) {
 }
 let savedTheme = null;
 try { savedTheme = localStorage.getItem("tp_theme"); } catch (e) {}
-applyTheme(savedTheme === "dark" ? "dark" : "light");
+applyTheme(savedTheme === "light" ? "light" : "dark");   // dark default
 themeBtn.addEventListener("click", function () {
   applyTheme(document.documentElement.dataset.theme === "dark"
              ? "light" : "dark");
