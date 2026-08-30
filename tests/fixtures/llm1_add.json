@@ -1,0 +1,13 @@
+{"action": "generate_program",
+ "params": {"task": "move from home to position 2",
+            "from": "PR[1] 'home'",
+            "to": "PR[2] 'position 2'",
+            "travel_speed": "100mm/sec"},
+ "program_name": "MOVE_P2",
+ "notes": ["move from home to position 2"],
+ "inferred": [{"text": "add pr2 to the table",
+               "decision": "added PR[2] 'position 2' as a new untaught entry"}],
+ "table_add": [{"type": "PR", "index": 2, "comment": "position 2"},
+               {"type": "PR", "index": 5, "comment": "override attempt"}],
+ "base_draft": null,
+ "fix_guidance": null}

@@ -135,6 +135,7 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
 
     chunks: list[str] = []
     retrieval_note: str | None = None
+    table_notes: list[str] = []   # user-requested table additions/refusals
     drafts: dict[str, str] = {}
     draft_errors: dict[str, list] = {}    # verdict errors per draft id
     attempts = 0
@@ -205,6 +206,28 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
             if pinned is None:                  # first attempt: fix the task
                 params = action.get("params") or {}
                 program_name = str(action.get("program_name") or "PROGRAM")
+
+                # user-requested table additions (owner decision): the
+                # runtime merges NEW entries into the working table -
+                # add-only, existing indexes never overridden, nothing
+                # written back to a file. The renderer and validator see
+                # the merged table from here on; the report says so.
+                adds = action.get("table_add") or []
+                if adds and check_table is not None:
+                    table, added, refused = \
+                        table_store.with_additions(table, adds)
+                    check_table = table
+                    for e in added:
+                        note = f" '{e.comment}'" if e.comment else ""
+                        table_notes.append(
+                            f"I added {e.type}[{e.index}]{note} to the "
+                            f"working table at your request. It isn't "
+                            f"taught yet - teach it on the pendant, and "
+                            f"add the row to your table file to keep it "
+                            f"for future runs.")
+                        sess.log_decision(f"table_add {e.type}[{e.index}]")
+                    table_notes.extend(refused)
+
                 if retrieve_fn is not None and not chunks:
                     # mandatory pre-generation retrieval (DESIGN flow step 4)
                     query = str(params.get("task")
@@ -294,7 +317,7 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
         positions=_positions(program, table),
         inferred=inferred,
         retries=attempts - 1,
-        advisories=_mandatory_advisories(source)
+        advisories=_mandatory_advisories(source) + table_notes
         + ([retrieval_note] if retrieval_note else [])
         + verdict.warnings + advisories)
     file_ref = output_store.save(sess.id, draft_id, program_name, program,

@@ -61,6 +61,26 @@ class TestHandle:
         assert env.data["outputs"][0]["program_name"] == "PICK_PLACE_A"
         assert resp.report.scan_used                  # cache timestamp
 
+    def test_user_requested_table_addition(self, env, monkeypatch):
+        # "add pr2 to the table": the runtime merges the new entry (so the
+        # validator accepts PR[2]) but refuses the override of PR[5]
+        monkeypatch.setenv("TP_LLM1", "mock:tests/fixtures/llm1_add.json,"
+                                      "tests/fixtures/llm1_audit.json")
+        monkeypatch.setenv("TP_LLM2", "mock:tests/fixtures/move_p2.ls")
+        resp = handle(Request(
+            prompt="user: create a tp program to move the robot from "
+                   "position 1 to position 2\n"
+                   "assistant: I couldn't find PR[2] in your table - which "
+                   "register should I move to instead, or say 'add PR[2]'?\n"
+                   "user: add pr2 to the table",
+            cell_id="line3_fanuc1"))
+        assert resp.status == "ok"
+        assert "PR[2:position 2]" in resp.program_ls
+        ads = " ".join(resp.report.advisories)
+        assert "added PR[2]" in ads                 # the addition, reported
+        assert "PR[5] already exists" in ads        # the override, refused
+        assert resp.report.positions["PR[2]"] == "note 'position 2'"
+
     def test_ask_user_flow(self, env, monkeypatch):
         monkeypatch.setenv("TP_LLM1", "mock:tests/fixtures/llm1_ask.json")
         resp = handle(Request(prompt="put it on the fixture",

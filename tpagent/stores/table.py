@@ -23,7 +23,8 @@ from functools import lru_cache
 from io import StringIO
 
 from tpagent.config import ROOT
-from tpagent.reg_io import RegIOTable, SchemaError, parse_reg_io_csv
+from tpagent.reg_io import (IO_DIR, REG_TYPES, Entry, RegIOTable,
+                            SchemaError, parse_reg_io_csv)
 
 DEFAULT_TABLE = ROOT / "config" / "default_table.csv"
 
@@ -81,6 +82,58 @@ def parse_scan(raw_csv: str) -> RegIOTable:
     reg_io.py's only importer.
     """
     return parse_reg_io_csv(raw_csv)
+
+
+def with_additions(table: RegIOTable, additions: list) \
+        -> tuple[RegIOTable, list[Entry], list[str]]:
+    """Owner decision (2026-08-31): on an EXPLICIT user request the agent
+    may ADD new entries to the working table for this run. Existing
+    indexes are NEVER overridden, and nothing is written back to any
+    table file - the advisory tells the user to add the row for keeps.
+
+    Returns (table', accepted entries, refusal notes). The input table
+    is never mutated - the default table is a shared cached object."""
+    taken = table.key_set()
+    accepted: list[Entry] = []
+    refused: list[str] = []
+    for raw in additions:
+        if not isinstance(raw, dict):
+            continue
+        t = str(raw.get("type") or "").strip().upper()
+        try:
+            idx = int(raw.get("index"))
+        except (TypeError, ValueError):
+            idx = None
+        if t in REG_TYPES:
+            cat, direction, init = "REG", None, False    # new = untaught
+        elif t in IO_DIR:
+            cat, direction, init = "IO", IO_DIR[t], None
+        else:
+            refused.append(
+                f"I couldn't add '{raw.get('type')}' to the table - I "
+                f"don't recognize that entry type.")
+            continue
+        if idx is None or idx < 1:
+            refused.append(
+                f"I couldn't add {t}[{raw.get('index')}] - the index must "
+                f"be a positive number.")
+            continue
+        if (t, idx) in taken:
+            refused.append(
+                f"{t}[{idx}] already exists in your table, so I kept the "
+                f"existing entry - loaded rows are never overwritten.")
+            continue
+        taken.add((t, idx))
+        accepted.append(Entry(
+            type=t, index=idx,
+            comment=str(raw.get("comment") or "").strip(),
+            initialized=init, value="", category=cat, direction=direction))
+    if not accepted:
+        return table, [], refused
+    merged = RegIOTable(cell_id=table.cell_id, scanned_at=table.scanned_at,
+                        entries=[*table.entries, *accepted],
+                        flags=list(table.flags))
+    return merged, accepted, refused
 
 
 @lru_cache(maxsize=8)

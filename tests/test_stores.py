@@ -108,6 +108,46 @@ class TestNormalization:
             normalize_scan("\n  \n", "c1")
 
 
+class TestAdditions:
+    """with_additions: user-requested entries - add-only, never override."""
+
+    def test_new_register_added_untaught(self):
+        t, _ = materialize("line3_fanuc1", CSV)
+        t2, added, refused = table.with_additions(
+            t, [{"type": "PR", "index": 2, "comment": "position 2"}])
+        assert [(e.type, e.index) for e in added] == [("PR", 2)]
+        assert refused == []
+        assert t2.find("PR", 2).initialized is False    # new = untaught
+        assert t2.find("PR", 2).comment == "position 2"
+        assert t.find("PR", 2) is None      # the input table is untouched
+
+    def test_existing_index_never_overridden(self):
+        t, _ = materialize("line3_fanuc1", CSV)
+        t2, added, refused = table.with_additions(
+            t, [{"type": "PR", "index": 5, "comment": "override attempt"}])
+        assert added == [] and t2 is t
+        assert "already exists" in refused[0]
+        assert t2.find("PR", 5).comment == "conveyor pick"
+
+    def test_io_direction_and_bad_entries(self):
+        t, _ = materialize("line3_fanuc1", CSV)
+        t2, added, refused = table.with_additions(t, [
+            {"type": "DO", "index": 9, "comment": "spare lamp"},
+            {"type": "XX", "index": 1},
+            {"type": "DO", "index": 0}])
+        assert [(e.type, e.index) for e in added] == [("DO", 9)]
+        assert t2.find("DO", 9).direction == "out"
+        assert len(refused) == 2
+
+    def test_duplicate_within_request_added_once(self):
+        t, _ = materialize("line3_fanuc1", CSV)
+        t2, added, refused = table.with_additions(t, [
+            {"type": "R", "index": 40, "comment": "a"},
+            {"type": "R", "index": 40, "comment": "b"}])
+        assert len(added) == 1 and "already exists" in refused[0]
+        assert t2.find("R", 40).comment == "a"
+
+
 class TestSession:
     def test_open_creates_row(self):
         mock = MockSupabase()
