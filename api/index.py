@@ -21,6 +21,7 @@ from tpagent.contract import Request
 from tpagent.llm_client import LLMClient
 from tpagent.rag import retrieve as rag_retrieve
 from tpagent.steps import StepsRecorder
+from tpagent.stores import table as table_store
 
 app = FastAPI(title="TP Creator")
 
@@ -61,6 +62,19 @@ def team_info() -> dict:
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/api/table")
+def active_table() -> dict:
+    """The registers/IO table the agent uses when nothing is uploaded
+    (the GUI shows an uploaded table from its own memory instead)."""
+    cell = os.environ.get("DEMO_CELL", "line3_fanuc1")
+    t, source = table_store.materialize(cell, None)
+    csv_text = None
+    if source == "default_table":
+        csv_text = table_store.DEFAULT_TABLE.read_text(encoding="utf-8")
+    return {"source": source, "cell_id": cell,
+            "entries": len(t.entries), "csv": csv_text}
 
 
 @app.get("/api/model_architecture")

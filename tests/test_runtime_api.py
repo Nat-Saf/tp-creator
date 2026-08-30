@@ -181,7 +181,7 @@ class TestApiExecute:
         assert "text/html" in r.headers["content-type"]
         for marker in ("Run Agent", "New task", "textarea",
                        "/api/execute", "Steps trace",
-                       "Load registers/IO table"):
+                       "Load registers/IO table", "Show table"):
             assert marker in r.text, marker
 
     def test_transcript_prompt_passes_through(self, env):

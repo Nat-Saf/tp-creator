@@ -104,6 +104,13 @@ class TestEndpoints:
                                         "flow": manifest["flow"]}
         assert len(body["how_it_works"]["flow"]) == 10
 
+    def test_table_endpoint_serves_default(self):
+        body = TestClient(app).get("/api/table").json()
+        assert set(body) == {"source", "cell_id", "entries", "csv"}
+        assert body["source"] == "default_table"
+        assert body["entries"] > 0
+        assert "# schema: reg_io_v1" in body["csv"]
+
     def test_team_info_still_exact(self):
         body = TestClient(app).get("/api/team_info").json()
         assert set(body) == {"group_batch_order_number", "team_name",

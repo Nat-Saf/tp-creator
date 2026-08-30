@@ -115,6 +115,14 @@
   #hint p { margin: 0 0 12px; }
   #hint p:first-child { color: var(--text); font-weight: 600; }
   .running { color: var(--sub); font-size: .88rem; }
+  .tablenote { color: var(--sub); font-size: .84rem; margin-bottom: 8px; }
+  .regtable { overflow-x: auto; margin: 4px 0; }
+  .regtable table { border-collapse: collapse; width: 100%;
+                    font-size: .84rem; }
+  .regtable th, .regtable td { border: 1px solid var(--border);
+                               padding: 4px 10px; text-align: left; }
+  .regtable th { background: var(--btn); text-transform: uppercase;
+                 font-size: .72rem; letter-spacing: .05em; }
 </style>
 </head>
 <body>
@@ -140,7 +148,9 @@
        &ldquo;pick a part from the conveyor and put it on fixture A,
        gently&rdquo; &mdash; then press Run Agent (or just Enter).</p>
     <p>You can load your own registers/IO table (.csv) with the button
-       below &mdash; without one, the built-in cell table is used.</p>
+       below &mdash; without one, the built-in cell table is used.
+       &ldquo;Show table&rdquo; displays the active table and lets you
+       save it as CSV.</p>
     <p>If something is missing I&rsquo;ll ask a question &mdash; answer in
        the same box, the whole conversation stays my context.</p>
     <p>Need an index that isn&rsquo;t in the table? Say &ldquo;add
@@ -155,6 +165,7 @@
 <div id="composer">
 <div id="tablebar">
   <button id="loadtable" title="Load a registers/IO table for your cell">Load registers/IO table (.csv)</button>
+  <button class="api" id="showtable" title="Show the registers/IO table the agent will use">Show table</button>
   <span id="tablechip"><span id="tablename"></span><button id="cleartable" title="Remove the loaded table">&times;</button></span>
   <span id="tablemsg"></span>
   <input type="file" id="tablefile" accept=".csv,text/csv" hidden>
@@ -174,6 +185,7 @@ const hint = document.getElementById("hint");
 let turns = [];          // committed transcript: {role, text}
 let busy = false;
 let tableCsv = null;     // loaded registers/IO table, resent every call
+let tableCsvName = null; // its file name (for save-as-csv)
 let lastExecute = null;  // raw JSON of the last /api/execute reply
 
 function el(tag, cls, text) {
@@ -212,12 +224,8 @@ function stepsBlock(steps) {
   return outer;
 }
 
-function saveProgram(code) {
-  const m = code.match(/^\/PROG\s+(\S+)/);
-  const name = (m ? m[1] : "PROGRAM") + ".ls";
-  // robot tools expect CRLF line endings
-  const blob = new Blob([code.replace(/\r?\n/g, "\r\n") + "\r\n"],
-                        { type: "text/plain" });
+function saveFile(text, name, mime) {
+  const blob = new Blob([text], { type: mime || "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -225,6 +233,47 @@ function saveProgram(code) {
   a.click();
   a.remove();
   setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+}
+
+function saveProgram(code) {
+  const m = code.match(/^\/PROG\s+(\S+)/);
+  // robot tools expect CRLF line endings
+  saveFile(code.replace(/\r?\n/g, "\r\n") + "\r\n",
+           (m ? m[1] : "PROGRAM") + ".ls");
+}
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "", quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } else quoted = false;
+      } else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+function regTableFromCsv(csv) {
+  const rows = csv.split(/\r?\n/)
+    .filter(function (l) { return l.trim() && !l.trim().startsWith("#"); })
+    .map(parseCsvLine);
+  const t = document.createElement("table");
+  rows.forEach(function (cells, i) {
+    const tr = document.createElement("tr");
+    cells.forEach(function (v) {
+      tr.appendChild(el(i === 0 ? "th" : "td", "", v));
+    });
+    t.appendChild(tr);
+  });
+  const box = el("div", "regtable");
+  box.appendChild(t);
+  return box;
 }
 
 function showAssistant(responseText, steps) {
@@ -348,6 +397,7 @@ tableFile.addEventListener("change", function () {
   const reader = new FileReader();
   reader.onload = function () {
     tableCsv = String(reader.result);
+    tableCsvName = f.name;
     document.getElementById("tablename").textContent = "table: " + f.name;
     tableChip.style.display = "inline-block";
   };
@@ -355,8 +405,43 @@ tableFile.addEventListener("change", function () {
 });
 document.getElementById("cleartable").addEventListener("click", function () {
   tableCsv = null;
+  tableCsvName = null;
   tableChip.style.display = "none";
   tableMsg.textContent = "";
+});
+
+document.getElementById("showtable").addEventListener("click", function () {
+  toggleApiCard("showtable", "Registers / IO table", async function (c) {
+    try {
+      let csv = tableCsv, name = tableCsvName, note;
+      if (csv) {
+        note = "Your uploaded table - it is sent with every run.";
+      } else {
+        const r = await fetch("/api/table");
+        const data = await r.json();
+        if (!data.csv) {
+          c.appendChild(el("div", "msg",
+            "No table is loaded and no built-in default is available - "
+            + "the robot is treated as empty (any index is usable)."));
+          return;
+        }
+        csv = data.csv;
+        name = "default_table.csv";
+        note = "The built-in default table (cell '" + data.cell_id
+             + "') - used whenever no table is uploaded.";
+      }
+      c.appendChild(el("div", "tablenote", note));
+      c.appendChild(regTableFromCsv(csv));
+      const save = el("button", "save", "Save table (.csv)");
+      save.addEventListener("click", function () {
+        saveFile(csv, name, "text/csv");
+      });
+      c.appendChild(save);
+    } catch (err) {
+      c.appendChild(el("div", "msg", "The table could not be loaded."));
+    }
+    scrollDown();
+  });
 });
 
 let apiCard = null;      // one endpoint response shown at a time

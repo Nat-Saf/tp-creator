@@ -127,6 +127,7 @@ the page show the live responses of every API endpoint.
 | `GET /api/agent_info` | how the agent works: intro + numbered flow, prompt template, two real recorded runs |
 | `GET /api/model_architecture` | the agent architecture diagram (PNG) |
 | `GET /api/team_info` | team details |
+| `GET /api/table` | the built-in default registers/IO table (source, cell, CSV) |
 | `GET /api/health` | `{"ok": true}` |
 
 Every GET endpoint also has a one-click button at the top of the GUI, so
