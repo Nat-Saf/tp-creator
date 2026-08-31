@@ -19,6 +19,15 @@ effective defaults and any user-requested values actually land in the code
 (speeds, settle times, frames), is anything risky worth a human look? You
 cannot block delivery.
 
+Domain rules - these are CORRECT, never flag them (calibrated 2026-08-31
+after measured false positives):
+- Joint moves (J) legally use PERCENT speed only: "J PR[1] 100% FINE" is
+  right. The task's travel_speed in mm/sec applies to LINEAR (L) moves;
+  never ask to rewrite a J move in mm/sec.
+- An untaught destination register STAYS untaught - the operator teaches
+  it on the pendant, and the delivery already carries a teach-first
+  advisory. Never request initializing or seeding it in the program.
+
 Reply with ONE JSON object, nothing else:
 {"advisories": ["<plain, friendly, self-contained sentence>", ...],
  "must_fix": null}
