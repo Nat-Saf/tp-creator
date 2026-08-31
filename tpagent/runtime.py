@@ -203,8 +203,7 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 if added:
                     table_csv_out = table_store.to_csv(new_table)
                     lines.append("Press 'Save table (.csv)' on the page to "
-                                 "keep it permanently. What program should "
-                                 "I write with it?")
+                                 "keep it permanently.")
                 if not lines:
                     lines = ["I couldn't find anything to change in the "
                              "table - can you name the entry to add, like "
