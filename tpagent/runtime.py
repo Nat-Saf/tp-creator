@@ -249,6 +249,47 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
             attempts += 1
             inferred.extend(action.get("inferred") or [])
 
+            # user-requested table edits (owner decision) apply on EVERY
+            # generate action, retries included - a guided fix may need
+            # to mark a scratch note mid-run. apply_edits no-ops repeats,
+            # nothing is ever written back to a file.
+            adds = action.get("table_add") or []
+            if adds and check_table is not None:
+                table, added, updated, refused = \
+                    table_store.apply_edits(table, adds)
+                check_table = table
+                if added or updated:
+                    table_csv_out = table_store.to_csv(table)
+                for e in added:
+                    note = f" '{e.comment}'" if e.comment else ""
+                    table_notes.append(
+                        f"I added {e.type}[{e.index}]{note} to the "
+                        f"working table at your request. It isn't "
+                        f"taught yet - teach it on the pendant, and "
+                        f"add the row to your table file to keep it "
+                        f"for future runs.")
+                    sess.log_decision(f"table_add {e.type}[{e.index}]")
+                for e in updated:
+                    note = f" '{e.comment}'" if e.comment else ""
+                    table_notes.append(
+                        f"I updated {e.type}[{e.index}]{note} in the "
+                        f"working table at your request - the loaded "
+                        f"file itself is never modified.")
+                    sess.log_decision(
+                        f"table_update {e.type}[{e.index}]")
+                table_notes.extend(refused)
+            elif adds:
+                # empty robot: any index is usable already - just
+                # acknowledge, never emit a one-row "table"
+                for a in adds:
+                    if isinstance(a, dict) and a.get("type") \
+                            and a.get("index") is not None:
+                        table_notes.append(
+                            f"Noted {a.get('type')}[{a.get('index')}] "
+                            f"- no table is loaded for this cell, so "
+                            f"any index is usable; teach it on the "
+                            f"pendant before running.")
+
             if pinned is None:                  # first attempt: fix the task
                 params = action.get("params") or {}
                 program_name = str(action.get("program_name") or "PROGRAM")
@@ -256,48 +297,6 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                     # edit turn: the delivered program goes to the renderer
                     # FROM THE REQUEST - LLM #1 only describes the delta
                     edit_prev = req.previous_ls
-
-                # user-requested table additions (owner decision): the
-                # runtime merges NEW entries into the working table -
-                # add-only, existing indexes never overridden, nothing
-                # written back to a file. The renderer and validator see
-                # the merged table from here on; the report says so.
-                adds = action.get("table_add") or []
-                if adds and check_table is not None:
-                    table, added, updated, refused = \
-                        table_store.apply_edits(table, adds)
-                    check_table = table
-                    if added or updated:
-                        table_csv_out = table_store.to_csv(table)
-                    for e in added:
-                        note = f" '{e.comment}'" if e.comment else ""
-                        table_notes.append(
-                            f"I added {e.type}[{e.index}]{note} to the "
-                            f"working table at your request. It isn't "
-                            f"taught yet - teach it on the pendant, and "
-                            f"add the row to your table file to keep it "
-                            f"for future runs.")
-                        sess.log_decision(f"table_add {e.type}[{e.index}]")
-                    for e in updated:
-                        note = f" '{e.comment}'" if e.comment else ""
-                        table_notes.append(
-                            f"I updated {e.type}[{e.index}]{note} in the "
-                            f"working table at your request - the loaded "
-                            f"file itself is never modified.")
-                        sess.log_decision(
-                            f"table_update {e.type}[{e.index}]")
-                    table_notes.extend(refused)
-                elif adds:
-                    # empty robot: any index is usable already - just
-                    # acknowledge, never emit a one-row "table"
-                    for a in adds:
-                        if isinstance(a, dict) and a.get("type") \
-                                and a.get("index") is not None:
-                            table_notes.append(
-                                f"Noted {a.get('type')}[{a.get('index')}] "
-                                f"- no table is loaded for this cell, so "
-                                f"any index is usable; teach it on the "
-                                f"pendant before running.")
 
                 if retrieve_fn is not None and not chunks:
                     # mandatory pre-generation retrieval (DESIGN flow step 4)

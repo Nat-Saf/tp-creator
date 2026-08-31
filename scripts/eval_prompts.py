@@ -225,6 +225,45 @@ def sc_relative_full(c):
                "scratch reset before ascent (overshoot) or never seeded")
 
 
+_ASSIGN = r"PR\[{idx}(?:\s*,\s*\d+)?(?::[^\]]*)?\]\s*="
+
+
+def _check_new_dest(c, r, idx, note):
+    if not c.need(r["prog"], "no program delivered"):
+        return
+    p = r["prog"]
+    c.need(f"PR[{idx}" in p, f"PR[{idx}] not used as the target")
+    c.need(not re.search(_ASSIGN.format(idx=idx), p),
+           f"program writes into the new destination PR[{idx}]")
+    c.need(not re.search(r"!.*table", p, re.IGNORECASE),
+           "program comments narrate the table change")
+    c.need(r["table"] and f"PR,{idx},{note}" in r["table"],
+           "updated table not returned with the new entry")
+
+
+def sc_new_dest_pr12(c):
+    r = call("create a program to move the robot from home position to "
+             "new pr12, add it to the table as 'middle point'")
+    _check_new_dest(c, r, 12, "middle point")
+
+
+def sc_new_dest_pr30(c):
+    r = call("move from home to a new position register PR[30] called "
+             "'inspection point', add it to the table")
+    _check_new_dest(c, r, 30, "inspection point")
+
+
+def sc_new_dest_with_io(c):
+    r = call("move from home to conveyor approach, then to a new PR[25] "
+             "'drop test point' (add it to the table), and turn on a new "
+             "output DO[42] 'blow air' there - add that too")
+    _check_new_dest(c, r, 25, "drop test point")
+    if r["prog"]:
+        c.need("DO[42" in r["prog"], "new output DO[42] not used")
+        c.need(r["table"] and "DO,42,blow air" in r["table"],
+               "DO[42] missing from the returned table")
+
+
 def sc_edit_final_move(c):
     r = follow("write the pick program", BASE_PROG,
                "edit the program, at the end move to PR[9] instead of home",
@@ -333,6 +372,7 @@ SCENARIOS = {f.__name__[3:]: f for f in [
     sc_missing_position_short, sc_add_pr2_flow, sc_table_only_add,
     sc_table_update_existing, sc_future_use_ack, sc_camera_no_match,
     sc_list_after_ask, sc_relative_ask, sc_relative_full,
+    sc_new_dest_pr12, sc_new_dest_pr30, sc_new_dest_with_io,
     sc_edit_final_move, sc_edit_speed, sc_name_request, sc_pulse_lamp,
     sc_wait_part_present, sc_counter_increment, sc_own_table_scan,
     sc_over_limit_speed, sc_reject_scope,

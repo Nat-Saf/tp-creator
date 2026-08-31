@@ -10,10 +10,12 @@ Owner decisions (2026-08-29, supersede DESIGN.md 4.9 on these points):
   program before teaching the pose is the real workshop workflow. The
   warning (with a did-you-mean when the inline label matches a taught
   entry's note) reaches the human as a report advisory instead.
-- (2026-08-31) SEEDING an untaught destination blocks: copying another
-  PR into an untaught PR and then moving to it (with no element
-  arithmetic in between - that pattern is the sanctioned relative-move
-  scratch idiom) defeats teaching; the pose must come from the pendant.
+- (2026-08-31) writing a position into an untaught PR that is also a
+  move target BLOCKS, unless the entry's table note marks it as a
+  scratch/temp/offset register (the sanctioned relative-move idiom).
+  Code-shape heuristics proved gameable - the model disguised seeding
+  with filler offset lines - so legitimacy comes from the table note,
+  which the user (or a user-authorized table edit) controls.
 """
 from __future__ import annotations
 
@@ -32,14 +34,15 @@ def _known(table, type_: str) -> dict:
             if e.type == type_ and e.initialized is not False}
 
 
-def _seeded_destination(body: str, idx: int) -> bool:
-    """PR[idx]=PR[j] + a move to PR[idx] + NO PR[idx,e]=... element line
-    == seeding an untaught destination (the element line is what makes
-    the legitimate relative-move scratch idiom)."""
-    return (re.search(rf"PR\[{idx}(?::[^\]]*)?\]\s*=\s*PR\[", body)
-            is not None
-            and re.search(rf"\b[JL]\s+PR\[{idx}[,:\]]", body) is not None
-            and re.search(rf"PR\[{idx}\s*,\s*\d", body) is None)
+_SCRATCH_NOTE = re.compile(r"scratch|temp|offset", re.IGNORECASE)
+
+
+def _written_move_target(body: str, idx: int) -> bool:
+    """The program writes a position into PR[idx] (whole-register or an
+    element) AND moves to it."""
+    return (re.search(rf"PR\[{idx}(?:\s*,\s*\d+)?(?::[^\]]*)?\]\s*=",
+                      body) is not None
+            and re.search(rf"\b[JL]\s+PR\[{idx}[,:\]]", body) is not None)
 
 
 def check(text: str, table) -> tuple[list[Err], list[str]]:
@@ -77,14 +80,17 @@ def check(text: str, table) -> tuple[list[Err], list[str]]:
                         f"(scan {table.scanned_at or 'unknown'}).",
                 known=_known(table, type_)))
         elif entry.initialized is False:
-            if type_ == "PR" and _seeded_destination(body, idx):
+            if (type_ == "PR" and _written_move_target(body, idx)
+                    and not _SCRATCH_NOTE.search(entry.comment or "")):
                 errors.append(Err(
                     layer="existence", line=line_no, ref=ref,
                     message=f"{ref} is untaught and used as a move target, "
-                            f"but the program copies another position into "
-                            f"it first - remove that line; the operator "
-                            f"teaches {ref} on the pendant, the program "
-                            f"just moves to it."))
+                            f"but the program writes a position into it - "
+                            f"remove those lines: the operator teaches "
+                            f"{ref} on the pendant and the program just "
+                            f"moves to it. (A register meant for relative-"
+                            f"move offsets needs a table note marking it "
+                            f"as scratch.)"))
                 continue
             hit = (next((e for e in table.by_note(label, type_)), None)
                    if label else None)

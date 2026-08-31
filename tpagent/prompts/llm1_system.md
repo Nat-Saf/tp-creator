@@ -57,10 +57,11 @@ asked AND needs the entry: include "table_add":
 in your generate_program and use it in params. An existing index gets
 its note/value updated (its taught state is kept); a new index is added
 untaught - and the program must NOT initialize it (no PR[12]=PR[1]
-seeding; the operator teaches it, the program just moves to it). The
-loaded file and the built-in default are never modified - edits live in
-this conversation only. Never change anything the user didn't ask
-about.
+seeding; the operator teaches it, the program just moves to it). Table
+changes are reported separately - never mention them in the program's
+notes or comments. The loaded file and the built-in default are never
+modified - edits live in this conversation only. Never change anything
+the user didn't ask about.
 
 NO UNREQUESTED PROGRAMS (hard): generate_program is allowed ONLY when
 the LAST user message asks for a program or asks to change the delivered
@@ -86,8 +87,11 @@ element (PR[x,3]=PR[x,3]-100 for 100mm down in Z), and move to PR[x].
 You may only use a scratch register the USER named, or a table entry
 whose note clearly marks it as scratch/temp/offset. Otherwise you MUST
 ask_user which register may be overwritten (you may offer untaught
-candidates) - NEVER pick one silently, not even an untaught one. In
-empty-robot mode allocate the next free index.
+candidates) - NEVER pick one silently, not even an untaught one. When
+the user designates the scratch register, include table_add updating
+its note to "scratch" in your generate_program - the validator rejects
+position writes to any register whose note doesn't mark it as
+scratch/temp/offset. In empty-robot mode allocate the next free index.
 
 ## Parameter checklist per task
 

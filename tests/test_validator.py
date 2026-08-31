@@ -257,10 +257,24 @@ class TestSeededDestination:
         assert any("untaught and used as a move target" in (e.message or "")
                    for e in v.errors)
 
-    def test_scratch_idiom_with_element_offset_passes(self, table):
+    def test_disguised_seeding_with_filler_offsets_blocks(self, table):
+        # the model gamed the old code-shape exemption with a fake
+        # element line - only a scratch table note unlocks writes now
+        v = run(make_prog("PR[10]=PR[1]",
+                          "PR[10,3]=PR[10,3]+100",
+                          "J PR[1:home] 100% FINE",
+                          "L PR[10] 100mm/sec FINE"), table, LIMITS)
+        assert v.verdict == "fail"
+        assert any("untaught and used as a move target" in (e.message or "")
+                   for e in v.errors)
+
+    def test_note_marked_scratch_register_may_be_written(self, table):
+        from tpagent.stores.table import apply_edits
+        marked, _, _, _ = apply_edits(table, [
+            {"type": "PR", "index": 10, "comment": "scratch for offsets"}])
         v = run(make_prog("PR[10]=PR[6]",
                           "PR[10,3]=PR[10,3]-100",
-                          "L PR[10] 50mm/sec FINE"), table, LIMITS)
+                          "L PR[10] 50mm/sec FINE"), marked, LIMITS)
         assert not [e for e in v.errors if e.layer == "existence"]
         assert any("not yet taught" in w for w in v.warnings)
 
