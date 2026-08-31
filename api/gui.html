@@ -116,6 +116,10 @@
   #hint p:first-child { color: var(--text); font-weight: 600; }
   .running { color: var(--sub); font-size: .88rem; }
   .tablenote { color: var(--sub); font-size: .84rem; margin-bottom: 8px; }
+  .infohead { font-weight: 700; font-size: .8rem; letter-spacing: .05em;
+              text-transform: uppercase; color: var(--accent);
+              margin: 12px 0 6px; }
+  .infohead:first-child { margin-top: 0; }
   #tablepanel, #configpanel { display: none; position: fixed; top: 0;
                 right: 0; bottom: 0; width: 50vw; background: var(--card);
                 border-left: 1px solid var(--border); z-index: 40;
@@ -853,30 +857,52 @@ document.getElementById("closeconfig").addEventListener("click",
 document.getElementById("infobtn").addEventListener("click", function () {
   toggleApiCard("infobtn", "How this page works", function (c) {
     [
-      "Type what the program should do and press Run (or Enter). If "
-      + "something is missing I ask - answer in the same box; the whole "
-      + "conversation stays my context. New task starts fresh.",
-      "Show table opens the registers/IO table in a side panel: view it, "
-      + "edit cells directly, add or remove rows, Undo, Reset, or save "
-      + "it as CSV. You can also load your own CSV, or edit in chat "
-      + "('add PR[2] as pick point') - edits live in this conversation "
-      + "only; the file and the built-in default are never modified.",
-      "Config opens the program defaults (speeds, approach motion, "
-      + "settle time) - values you set apply to every run in this "
-      + "conversation; safety limits are fixed per cell.",
-      "Every delivered program has a Save program (.ls) button, a "
-      + "folded Report & advisories section, and the Steps trace with "
-      + "every model call. Ask follow-up edits in plain words - "
-      + "'change line 13 to move to PR[10]'.",
-      "The result is robot-ready: load the .ls and the table CSV on the "
-      + "robot, teach the positions the report marks as untaught, and "
-      + "run - no integration work.",
-      "The endpoint buttons at the top show the live responses of the "
-      + "course API (team info, agent info, architecture, raw execute).",
-    ].forEach(function (s) {
-      const d = el("div", "msg", s);
-      d.style.marginBottom = "10px";
-      c.appendChild(d);
+      ["How the robot works", [
+        "A FANUC robot runs two things together. The TP program (.ls) "
+        + "is the list of commands - moves, gripper signals, waits. The "
+        + "registers/IO table is the robot's MEMORY: taught positions "
+        + "(PR), numbers (R), strings (SR), and the wired input/output "
+        + "signals (DI/DO/RI/RO...).",
+        "The program itself holds no coordinates and no wiring - every "
+        + "move and every signal points at an entry in that memory. "
+        + "Load the table into the robot first, and the program runs "
+        + "using it: PR[5] means whatever pose is taught there, RO[1] "
+        + "switches whatever is wired there.",
+      ]],
+      ["The workflow", [
+        "Describe the task and press Run (or Enter). The agent maps "
+        + "your words to the table entries through their pendant notes, "
+        + "writes the program, and validates every line against the "
+        + "table and the safety limits.",
+        "Then save BOTH files - the program (.ls) and the table (.csv) "
+        + "- load them on the robot, teach the positions the report "
+        + "marks as untaught, and run. No integration work.",
+      ]],
+      ["The controls", [
+        "Show table - the robot's memory, in a side panel: edit cells, "
+        + "add or remove rows, Undo, Reset, save as CSV. You can also "
+        + "load your own CSV or edit in chat ('add PR[2] as pick "
+        + "point'). Edits live in this conversation only; the file and "
+        + "the built-in default are never modified.",
+        "Config - the program defaults (speeds, approach motion, settle "
+        + "time); values you set apply to every run in this "
+        + "conversation. Safety limits are fixed per cell.",
+        "Every delivered program has a Save program (.ls) button, a "
+        + "folded Report & advisories section, and the Steps trace with "
+        + "every model call. Ask follow-up edits in plain words - "
+        + "'change line 13 to move to PR[10]'.",
+        "If something is missing I ask a question - answer in the same "
+        + "box; the whole conversation stays my context. New task "
+        + "starts fresh. The endpoint buttons at the top show the live "
+        + "responses of the course API.",
+      ]],
+    ].forEach(function (section) {
+      c.appendChild(el("div", "infohead", section[0]));
+      section[1].forEach(function (s) {
+        const d = el("div", "msg", s);
+        d.style.marginBottom = "10px";
+        c.appendChild(d);
+      });
     });
   });
 });
