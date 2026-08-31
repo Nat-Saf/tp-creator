@@ -84,6 +84,27 @@ numbered flow below.
     `{status, error, response, steps}`, and the steps recorder
     guarantees every model call appears in the trace, in order.
 
+## Architecture efficiency - measured, not assumed
+
+The design was evaluated live on 2026-08-31 with a 30-scenario study
+(full report: [docs/Design_Evaluation_Study.docx](docs/Design_Evaluation_Study.docx),
+measured flow: [docs/design_study_flow.png](docs/design_study_flow.png)):
+
+- a delivered program costs **5.4 model calls on average** (the floor is
+  4: intake, embedding, draft, audit); questions and table edits cost
+  exactly **1 call**
+- **75% of first drafts** pass the deterministic three-layer validator;
+  retries concentrate in genuinely hard tasks, and the 3-draft budget
+  stop was observed ending an impossible task exactly on schedule
+- retrieval is **one embedding call per program** (5 chunks, ~3k chars
+  into the code-generator prompt); LLM #1 requested an extra retrieval
+  only once in 30 runs - the escalation valve, not a workhorse
+- the audit caught real semantic bugs (wrong release signal, missing
+  timeouts, an else-branch still holding the part) and the validator
+  overruled its occasional bad fix - the layering works both ways. Its
+  two measured false-positive classes were calibrated away afterwards
+  (joint-move percent speeds; untaught destinations)
+
 ### Table sources
 
 The bundled default table lives at `config/default_table.csv` in this
@@ -142,9 +163,15 @@ the previous program is edited minimally, not re-invented), **relative
 moves** ("move down by 100mm" - implemented with a scratch position
 register the agent asks you to choose), and **table edits** ("add
 DO[100] 'dispenser on'", "add description to PR[10]" - new entries and
-note/value updates join the conversation's table, visible under Show
-table and saveable as CSV; New task reverts conversation edits to the
-loaded file).
+note/value updates join the conversation's table; New task reverts
+conversation edits to the loaded file).
+
+Two side panels take the right half of the window: **Show table** is a
+full editor for the robot's memory (dropdown-constrained cells, add or
+remove rows, Undo, Reset, save as CSV) and **Config** exposes the
+program defaults (speeds, approach motion, settle time) as per-
+conversation overrides, with the safety limits shown read-only. The
+**Info** button explains the robot model and the whole workflow.
 
 ## API
 
@@ -156,6 +183,7 @@ loaded file).
 | `GET /api/model_architecture` | the agent architecture diagram (PNG) |
 | `GET /api/team_info` | team details |
 | `GET /api/table` | the built-in default registers/IO table (source, cell, CSV) |
+| `GET /api/config` | program defaults, safety limits, overridable keys |
 | `GET /api/health` | `{"ok": true}` |
 
 Every GET endpoint also has a one-click button at the top of the GUI, so
@@ -184,9 +212,11 @@ Useful dev commands: `python -m tpagent.validator.verdict <file.ls> [--scan
 <reg_io.csv>]` validates any program; `python -m tpagent.rag.index` rebuilds
 the Pinecone index from `corpus/prepared/`; `python -m tpagent.architecture`
 regenerates the diagram; `scripts/build_agent_info.py` refreshes the recorded
-examples; `scripts/eval_prompts.py` runs the 21-scenario live prompt-quality
-eval (spends ~$0.3-0.5 of tokens - property checks on realistic
-conversations, results in `out/eval.json`).
+examples; `scripts/eval_prompts.py` runs the 52-scenario live
+prompt-quality eval (spends ~$0.5-0.8 of tokens - property checks on
+realistic conversations, results in `out/eval.json`);
+`scripts/build_test_examples.py` re-verifies the 15 grader example
+pairs in `corpus/examples/Testing/`.
 
 Development defaults to mock models (`TP_LLM2=mock:tests/fixtures/v1.ls`);
 live models run only for explicit smoke tests. The FANUC manuals used as

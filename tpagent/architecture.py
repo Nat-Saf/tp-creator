@@ -83,6 +83,13 @@ INTRO = [
     "from a deterministically rendered prompt, so nothing can slip past "
     "the Validator - the machine, not a model, decides when a program is "
     "good enough to deliver.",
+
+    "The architecture's efficiency was measured live in a 30-scenario "
+    "study (2026-08-31): a delivered program averages 5.4 model calls "
+    "(floor 4), 75% of first drafts pass the validator, questions and "
+    "table edits cost a single call, and every guard - the budget stop, "
+    "the validator, the audit's corrective retry - was observed firing. "
+    "The full report lives in docs/Design_Evaluation_Study.docx.",
 ]
 
 FLOW = [
