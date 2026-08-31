@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from tpagent import config, runtime
-from tpagent.contract import Request
+from tpagent.contract import OVERRIDABLE_DEFAULTS, Request
 from tpagent.llm_client import LLMClient
 from tpagent.rag import retrieve as rag_retrieve
 from tpagent.steps import StepsRecorder
@@ -62,6 +62,16 @@ def team_info() -> dict:
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/api/config")
+def config_view() -> dict:
+    """The TP-program defaults (overridable per request) and the fixed
+    safety limits (changed only in the cell's config file)."""
+    cfg = config.static_config()
+    return {"defaults": cfg.get("defaults", {}),
+            "limits": cfg.get("limits", {}),
+            "overridable": sorted(OVERRIDABLE_DEFAULTS)}
 
 
 @app.get("/api/table")
@@ -130,6 +140,7 @@ class ExecuteBody(BaseModel):
     prompt: str
     scan: str | None = None     # optional registers/IO table CSV (GUI upload)
     previous_ls: str | None = None   # last delivered program (edit turns)
+    config_overrides: dict | None = None   # DEFAULTS only (level-A checked)
 
 
 def _report_summary(report) -> str:
@@ -156,6 +167,7 @@ def execute(body: ExecuteBody) -> dict:
     try:
         req = Request(prompt=body.prompt, scan=body.scan,
                       previous_ls=body.previous_ls,
+                      config_overrides=body.config_overrides or {},
                       cell_id=os.environ.get("DEMO_CELL", "line3_fanuc1"))
         resp = runtime.handle(
             req, recorder=recorder,

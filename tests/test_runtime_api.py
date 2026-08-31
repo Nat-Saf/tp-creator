@@ -218,6 +218,21 @@ class TestApiExecute:
         assert "HTTP" not in body["error"] and "401" not in body["error"]
         assert body["steps"][-1]["response"]["detail"] == "HTTP 401"
 
+    def test_config_overrides_pass_level_a(self, env):
+        body = TestClient(app).post("/api/execute", json={
+            "prompt": "pick a part from the conveyor and put it on "
+                      "fixture A, gently",
+            "config_overrides": {"speed": 150}}).json()
+        assert body["status"] == "ok" and "/PROG" in body["response"]
+
+    def test_limit_override_rejected_friendly(self, env):
+        body = TestClient(app).post("/api/execute", json={
+            "prompt": "pick and place",
+            "config_overrides": {"max_wait_sec": 999}}).json()
+        assert body["status"] == "ok"          # rejection, friendly text
+        assert "safety limits" in body["response"]
+        assert body["steps"] == []             # level A: no model calls
+
     def test_malformed_body_keeps_exact_shape(self, env):
         body = TestClient(app).post("/api/execute", json={"wrong": 1}).json()
         assert set(body) == {"status", "error", "response", "steps"}

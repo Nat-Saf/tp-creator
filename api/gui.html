@@ -116,18 +116,31 @@
   #hint p:first-child { color: var(--text); font-weight: 600; }
   .running { color: var(--sub); font-size: .88rem; }
   .tablenote { color: var(--sub); font-size: .84rem; margin-bottom: 8px; }
-  #tablepanel { display: none; position: fixed; top: 0; right: 0;
-                bottom: 0; width: 50vw; background: var(--card);
+  #tablepanel, #configpanel { display: none; position: fixed; top: 0;
+                right: 0; bottom: 0; width: 50vw; background: var(--card);
                 border-left: 1px solid var(--border); z-index: 40;
                 overflow-y: auto; padding: 14px 16px; }
   body.table-open #tablepanel { display: block; }
-  body.table-open #composer { right: 50vw; }
-  body.table-open { padding-right: 50vw; }
-  #tablepanel h3 { font-size: .78rem; font-weight: 700;
+  body.config-open #configpanel { display: block; }
+  body.table-open #composer, body.config-open #composer { right: 50vw; }
+  body.table-open, body.config-open { padding-right: 50vw; }
+  #tablepanel h3, #configpanel h3 { font-size: .78rem; font-weight: 700;
                    letter-spacing: .06em; text-transform: uppercase;
                    color: var(--sub); margin: 2px 0 10px; }
-  #closetable { float: right; background: var(--btn); color: var(--text);
-                padding: 4px 12px; font-weight: 700; }
+  #closetable, #closeconfig { float: right; background: var(--btn);
+                color: var(--text); padding: 4px 12px; font-weight: 700; }
+  .regtable td[contenteditable] { outline: none; }
+  .regtable td[contenteditable]:focus { background: var(--accent-soft); }
+  .rowdel { background: none; border: 0; color: #cf222e; padding: 0 6px;
+            font-weight: 700; }
+  .cfgrow { display: flex; align-items: center; gap: 10px;
+            margin-bottom: 8px; }
+  .cfgrow label { flex: 1; font-size: .88rem; }
+  .cfgrow input { width: 160px; border: 1px solid var(--field-border);
+                  border-radius: 6px; padding: 6px 8px; font: inherit;
+                  background: var(--bg); color: var(--text); }
+  .cfglimits { margin-top: 14px; color: var(--sub); font-size: .84rem; }
+  #tablepanelbody .save, #configpanelbody .save { margin-right: 8px; }
   .regtable { overflow-x: auto; margin: 4px 0; }
   .regtable table { border-collapse: collapse; width: 100%;
                     font-size: .84rem; }
@@ -184,10 +197,17 @@
   <div id="tablepanelbody"></div>
 </div>
 
+<div id="configpanel">
+  <button id="closeconfig" title="Close the config panel">&times;</button>
+  <h3>TP program config</h3>
+  <div id="configpanelbody"></div>
+</div>
+
 <div id="composer">
 <div id="tablebar">
   <button id="loadtable" title="Load a registers/IO table for your cell">Load registers/IO table (.csv)</button>
-  <button class="api" id="showtable" title="Show the registers/IO table the agent will use">Show table</button>
+  <button class="api" id="showtable" title="Show and edit the registers/IO table the agent will use">Show table</button>
+  <button class="api" id="showconfig" title="TP program defaults for this conversation">Config</button>
   <span id="tablechip"><span id="tablename"></span><button id="cleartable" title="Remove the loaded table">&times;</button></span>
   <span id="tablemsg"></span>
   <input type="file" id="tablefile" accept=".csv,text/csv" hidden>
@@ -285,16 +305,39 @@ function parseCsvLine(line) {
   return out;
 }
 
-function regTableFromCsv(csv) {
+function _editRow(tr) {
+  const td = el("td", "");
+  const del = el("button", "rowdel", "×");
+  del.title = "Remove this row";
+  del.addEventListener("click", function () { tr.remove(); });
+  td.appendChild(del);
+  tr.appendChild(td);
+}
+
+function regTableFromCsv(csv, editable) {
   const rows = csv.split(/\r?\n/)
     .filter(function (l) { return l.trim() && !l.trim().startsWith("#"); })
     .map(parseCsvLine);
   const t = document.createElement("table");
   rows.forEach(function (cells, i) {
     const tr = document.createElement("tr");
-    cells.forEach(function (v) {
-      tr.appendChild(el(i === 0 ? "th" : "td", "", v));
+    const source = (editable && i === 0)
+      ? ["type", "index", "comment", "initialized", "value"]
+      : cells.slice(0, 5);
+    source.forEach(function (v) {
+      const cell = el(i === 0 ? "th" : "td", "", v);
+      if (editable && i > 0) cell.contentEditable = "true";
+      tr.appendChild(cell);
     });
+    while (editable && tr.children.length < 5) {
+      const cell = el(i === 0 ? "th" : "td", "", "");
+      if (i > 0) cell.contentEditable = "true";
+      tr.appendChild(cell);
+    }
+    if (editable) {
+      if (i === 0) tr.appendChild(el("th", "", ""));
+      else _editRow(tr);
+    }
     t.appendChild(tr);
   });
   const box = el("div", "regtable");
@@ -379,6 +422,9 @@ async function run() {
     const payload = { prompt: transcriptWith(text) };
     if (tableCsv) payload.scan = tableCsv;
     if (lastProgram) payload.previous_ls = lastProgram;
+    if (Object.keys(configOverrides).length) {
+      payload.config_overrides = configOverrides;
+    }
     const r = await fetch("/api/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -394,12 +440,7 @@ async function run() {
       const tcut = shown.lastIndexOf(tmark);
       if (tcut >= 0) {
         tableCsv = shown.slice(tcut + tmark.length);
-        if (!tableCsvName) tableCsvName = "edited_table.csv";
-        tableEdited = true;
-        document.getElementById("tablename").textContent = uploadedName
-          ? "table: " + uploadedName + " (edited)"
-          : "table: edited in conversation";
-        tableChip.style.display = "inline-block";
+        markTableEdited();
         shown = shown.slice(0, tcut);
         if (tablePanelOpen) renderTablePanel();   // keep the panel fresh
       }
@@ -496,6 +537,37 @@ document.getElementById("cleartable").addEventListener("click", function () {
 
 const tablePanelBody = document.getElementById("tablepanelbody");
 let tablePanelOpen = false;
+let panelMeta = null;    // '#' meta lines of the csv shown in the panel
+
+function markTableEdited() {
+  tableEdited = true;
+  if (!tableCsvName) tableCsvName = "edited_table.csv";
+  document.getElementById("tablename").textContent = uploadedName
+    ? "table: " + uploadedName + " (edited)"
+    : "table: edited in conversation";
+  tableChip.style.display = "inline-block";
+}
+
+function csvField(s) {
+  s = (s || "").replace(/ /g, " ").replace(/\s+/g, " ").trim();
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function applyTableEdits() {
+  const t = tablePanelBody.querySelector(".regtable table");
+  if (!t) return;
+  const lines = ["type,index,comment,initialized,value"];
+  [].slice.call(t.rows, 1).forEach(function (tr) {
+    const c = [].slice.call(tr.cells, 0, 5).map(function (td) {
+      return td.textContent;
+    });
+    if (!c[0].trim() || !c[1].trim()) return;   // a row needs type+index
+    lines.push(c.map(csvField).join(","));
+  });
+  tableCsv = (panelMeta ? panelMeta + "\n" : "") + lines.join("\n") + "\n";
+  markTableEdited();
+  renderTablePanel();
+}
 
 function closeTablePanel() {
   tablePanelOpen = false;
@@ -508,7 +580,8 @@ async function renderTablePanel() {
   try {
     let csv = tableCsv, name = tableCsvName, note;
     if (csv) {
-      note = "This conversation's table - it is sent with every run.";
+      note = "This conversation's table - edit cells directly, then "
+           + "press Apply changes. It is sent with every run.";
     } else {
       const r = await fetch("/api/table");
       const data = await r.json();
@@ -521,15 +594,36 @@ async function renderTablePanel() {
       csv = data.csv;
       name = "default_table.csv";
       note = "The built-in default table (cell '" + data.cell_id
-           + "') - used whenever no table is uploaded.";
+           + "') - edit cells and press Apply changes to make it this "
+           + "conversation's table.";
     }
+    panelMeta = csv.split(/\r?\n/).filter(function (l) {
+      return l.trim().startsWith("#");
+    }).join("\n") || null;
     tablePanelBody.appendChild(el("div", "tablenote", note));
+    const apply = el("button", "save", "Apply changes");
+    apply.addEventListener("click", applyTableEdits);
+    const addRow = el("button", "save", "+ Add row");
+    addRow.addEventListener("click", function () {
+      const t = tablePanelBody.querySelector(".regtable table");
+      if (!t) return;
+      const tr = document.createElement("tr");
+      for (let k = 0; k < 5; k++) {
+        const td = el("td", "", "");
+        td.contentEditable = "true";
+        tr.appendChild(td);
+      }
+      _editRow(tr);
+      t.appendChild(tr);
+    });
     const save = el("button", "save", "Save table (.csv)");
     save.addEventListener("click", function () {
-      saveFile(csv, name, "text/csv");
+      saveFile(tableCsv || csv, name || "table.csv", "text/csv");
     });
+    tablePanelBody.appendChild(apply);
+    tablePanelBody.appendChild(addRow);
     tablePanelBody.appendChild(save);
-    tablePanelBody.appendChild(regTableFromCsv(csv));
+    tablePanelBody.appendChild(regTableFromCsv(csv, true));
   } catch (err) {
     tablePanelBody.appendChild(
       el("div", "msg", "The table could not be loaded."));
@@ -538,6 +632,7 @@ async function renderTablePanel() {
 
 document.getElementById("showtable").addEventListener("click", function () {
   if (tablePanelOpen) { closeTablePanel(); return; }
+  closeConfigPanel();
   tablePanelOpen = true;
   document.body.classList.add("table-open");
   this.classList.add("active");
@@ -545,6 +640,79 @@ document.getElementById("showtable").addEventListener("click", function () {
 });
 document.getElementById("closetable").addEventListener("click",
                                                        closeTablePanel);
+
+const configPanelBody = document.getElementById("configpanelbody");
+let configPanelOpen = false;
+let configOverrides = {};
+
+function closeConfigPanel() {
+  configPanelOpen = false;
+  document.body.classList.remove("config-open");
+  document.getElementById("showconfig").classList.remove("active");
+}
+
+async function renderConfigPanel() {
+  configPanelBody.textContent = "";
+  try {
+    const r = await fetch("/api/config");
+    const data = await r.json();
+    configPanelBody.appendChild(el("div", "tablenote",
+      "Defaults for the programs in this conversation - set a value and "
+      + "press Apply. Empty fields keep the cell default."));
+    const inputs = {};
+    data.overridable.forEach(function (key) {
+      const row = el("div", "cfgrow");
+      row.appendChild(el("label", "",
+                         key + "  (default: " + data.defaults[key] + ")"));
+      const inp = document.createElement("input");
+      inp.placeholder = String(data.defaults[key]);
+      if (key in configOverrides) inp.value = configOverrides[key];
+      inputs[key] = inp;
+      row.appendChild(inp);
+      configPanelBody.appendChild(row);
+    });
+    const apply = el("button", "save", "Apply");
+    apply.addEventListener("click", function () {
+      configOverrides = {};
+      Object.keys(inputs).forEach(function (key) {
+        const v = inputs[key].value.trim();
+        if (!v) return;
+        configOverrides[key] = v;   // units ride along ("150mm/sec")
+      });
+      const n = Object.keys(configOverrides).length;
+      document.getElementById("showconfig").textContent =
+        n ? "Config (" + n + ")" : "Config";
+      closeConfigPanel();
+    });
+    const clear = el("button", "save", "Clear overrides");
+    clear.addEventListener("click", function () {
+      configOverrides = {};
+      document.getElementById("showconfig").textContent = "Config";
+      renderConfigPanel();
+    });
+    configPanelBody.appendChild(apply);
+    configPanelBody.appendChild(clear);
+    configPanelBody.appendChild(el("div", "cfglimits",
+      "Safety limits (fixed per cell, changed only in the cell's config "
+      + "file): " + Object.keys(data.limits).map(function (k) {
+        return k + " = " + data.limits[k];
+      }).join(", ")));
+  } catch (err) {
+    configPanelBody.appendChild(el("div", "msg",
+      "The config could not be loaded."));
+  }
+}
+
+document.getElementById("showconfig").addEventListener("click", function () {
+  if (configPanelOpen) { closeConfigPanel(); return; }
+  closeTablePanel();
+  configPanelOpen = true;
+  document.body.classList.add("config-open");
+  this.classList.add("active");
+  renderConfigPanel();
+});
+document.getElementById("closeconfig").addEventListener("click",
+                                                        closeConfigPanel);
 
 let apiCard = null;      // one endpoint response shown at a time
 let apiCardKey = null;   // which button opened it - 2nd push closes it

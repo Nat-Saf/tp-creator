@@ -111,6 +111,14 @@ class TestEndpoints:
         assert body["entries"] > 0
         assert "# schema: reg_io_v1" in body["csv"]
 
+    def test_config_endpoint(self):
+        body = TestClient(app).get("/api/config").json()
+        assert set(body) == {"defaults", "limits", "overridable"}
+        assert body["defaults"]["speed"] == "100mm/sec"
+        assert body["limits"]["max_speed_mmsec"] == 250
+        assert "speed" in body["overridable"]
+        assert "max_speed_mmsec" not in body["overridable"]
+
     def test_team_info_still_exact(self):
         body = TestClient(app).get("/api/team_info").json()
         assert set(body) == {"group_batch_order_number", "team_name",
