@@ -10,6 +10,7 @@ deterministic. Run it after quality tuning; it spends live tokens
 
 With names, only those scenarios run. Results: printed + out/eval.json.
 """
+import contextvars
 import json
 import os
 import re
@@ -17,6 +18,8 @@ import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+_LOG = contextvars.ContextVar("scenario_log")
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -77,9 +80,13 @@ def call(prompt, scan=None, previous=None):
         head, report = text.split("\n--- report ---\n", 1)
         if head.strip().startswith("/PROG"):
             prog = head.strip()
-    return {"raw": r, "text": text, "prog": prog, "report": report,
-            "table": table_csv, "status": r["status"],
-            "modules": [s["module"] for s in r["steps"]]}
+    result = {"raw": r, "text": text, "prog": prog, "report": report,
+              "table": table_csv, "status": r["status"],
+              "modules": [s["module"] for s in r["steps"]]}
+    log = _LOG.get(None)
+    if log is not None:
+        log.append({"prompt": prompt[-200:], "reply": text[:900]})
+    return result
 
 
 def follow(t1_prompt, reply, t2_prompt, **kw):
@@ -257,8 +264,19 @@ def sc_name_request(c):
 
 
 def sc_pulse_lamp(c):
-    r = call("pick a part from the conveyor and place it on fixture B, "
-             "and pulse the green lamp for 1 second at the end")
+    t1 = ("pick a part from the conveyor and place it on fixture B, "
+          "and pulse the green lamp for 1 second at the end")
+    r = call(t1)
+    if not r["prog"]:
+        # a question here is legitimate: the default table has no
+        # 'fixture B approach' entry - answer it and expect the program
+        if not c.need("approach" in r["text"].lower()
+                      or "fixture B" in r["text"],
+                      f"unexpected question: {r['text'][:200]!r}"):
+            return
+        r = follow(t1, r["text"],
+                   "descend directly to fixture B place, no separate "
+                   "approach point needed")
     if c.need(r["prog"], "no program delivered"):
         c.need("PR[9" in r["prog"], "fixture B place PR[9] missing")
         c.need("DO[7" in r["prog"], "green lamp DO[7] missing")
@@ -322,29 +340,37 @@ SCENARIOS = {f.__name__[3:]: f for f in [
 
 
 def run_one(name):
-    c = Checks()
-    try:
-        SCENARIOS[name](c)
-    except Exception:
-        c.fails.append("exception: " + traceback.format_exc(limit=3))
-    return name, c.fails
+    def _inner():
+        log = []
+        _LOG.set(log)
+        c = Checks()
+        try:
+            SCENARIOS[name](c)
+        except Exception:
+            c.fails.append("exception: " + traceback.format_exc(limit=3))
+        return name, c.fails, log
+    return contextvars.copy_context().run(_inner)
 
 
 def main():
     names = sys.argv[1:] or list(SCENARIOS)
     results = {}
     with ThreadPoolExecutor(max_workers=4) as pool:
-        for name, fails in pool.map(run_one, names):
-            results[name] = fails
+        for name, fails, log in pool.map(run_one, names):
+            results[name] = {"fails": fails,
+                             "log": log if fails else []}
             mark = "PASS" if not fails else "FAIL"
             print(f"[{mark}] {name}")
             for f in fails:
                 print(f"       - {f}")
+            if fails:
+                for turn in log:
+                    print(f"       reply: {turn['reply'][:280]!r}")
     out = ROOT / "out"
     out.mkdir(exist_ok=True)
     (out / "eval.json").write_text(json.dumps(results, indent=2),
                                    encoding="utf-8")
-    passed = sum(1 for f in results.values() if not f)
+    passed = sum(1 for f in results.values() if not f["fails"])
     print(f"\n{passed}/{len(results)} scenarios passed "
           f"-> {out / 'eval.json'}")
 
