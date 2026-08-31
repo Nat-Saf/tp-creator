@@ -190,7 +190,7 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                         "index is already usable. To maintain a table, "
                         "load your CSV with the button on the page first, "
                         "then ask me again."])
-                new_table, added, refused = table_store.with_additions(
+                new_table, added, updated, refused = table_store.apply_edits(
                     table, action.get("add") or [])
                 lines = []
                 for e in added:
@@ -199,14 +199,21 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                     lines.append(f"Done - {e.type}[{e.index}]{note}{val} is "
                                  f"now in this conversation's table.")
                     sess.log_decision(f"edit_table add {e.type}[{e.index}]")
+                for e in updated:
+                    note = f" note '{e.comment}'" if e.comment else ""
+                    val = f" value {e.value}" if e.value else ""
+                    lines.append(f"Done - {e.type}[{e.index}] is updated:"
+                                 f"{note}{val}.")
+                    sess.log_decision(
+                        f"edit_table update {e.type}[{e.index}]")
                 lines.extend(refused)
-                if added:
+                if added or updated:
                     table_csv_out = table_store.to_csv(new_table)
                     lines.append("Press 'Save table (.csv)' on the page to "
                                  "keep it permanently.")
                 if not lines:
                     lines = ["I couldn't find anything to change in the "
-                             "table - can you name the entry to add, like "
+                             "table - can you name the entry, like "
                              "'add DO[100] dispenser on'?"]
                 return Response(status="needs_clarification",
                                 questions=[" ".join(lines)],
@@ -257,10 +264,10 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 # the merged table from here on; the report says so.
                 adds = action.get("table_add") or []
                 if adds and check_table is not None:
-                    table, added, refused = \
-                        table_store.with_additions(table, adds)
+                    table, added, updated, refused = \
+                        table_store.apply_edits(table, adds)
                     check_table = table
-                    if added:
+                    if added or updated:
                         table_csv_out = table_store.to_csv(table)
                     for e in added:
                         note = f" '{e.comment}'" if e.comment else ""
@@ -271,6 +278,14 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                             f"add the row to your table file to keep it "
                             f"for future runs.")
                         sess.log_decision(f"table_add {e.type}[{e.index}]")
+                    for e in updated:
+                        note = f" '{e.comment}'" if e.comment else ""
+                        table_notes.append(
+                            f"I updated {e.type}[{e.index}]{note} in the "
+                            f"working table at your request - the loaded "
+                            f"file itself is never modified.")
+                        sess.log_decision(
+                            f"table_update {e.type}[{e.index}]")
                     table_notes.extend(refused)
                 elif adds:
                     # empty robot: any index is usable already - just

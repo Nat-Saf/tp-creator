@@ -108,30 +108,39 @@ class TestNormalization:
             normalize_scan("\n  \n", "c1")
 
 
-class TestAdditions:
-    """with_additions: user-requested entries - add-only, never override."""
+class TestApplyEdits:
+    """apply_edits: add new entries or update existing note/value; the
+    input table (and any file) is never touched."""
 
     def test_new_register_added_untaught(self):
         t, _ = materialize("line3_fanuc1", CSV)
-        t2, added, refused = table.with_additions(
+        t2, added, updated, refused = table.apply_edits(
             t, [{"type": "PR", "index": 2, "comment": "position 2"}])
         assert [(e.type, e.index) for e in added] == [("PR", 2)]
-        assert refused == []
+        assert updated == [] and refused == []
         assert t2.find("PR", 2).initialized is False    # new = untaught
         assert t2.find("PR", 2).comment == "position 2"
         assert t.find("PR", 2) is None      # the input table is untouched
 
-    def test_existing_index_never_overridden(self):
+    def test_existing_entry_note_updated_taught_state_kept(self):
         t, _ = materialize("line3_fanuc1", CSV)
-        t2, added, refused = table.with_additions(
-            t, [{"type": "PR", "index": 5, "comment": "override attempt"}])
-        assert added == [] and t2 is t
-        assert "already exists" in refused[0]
-        assert t2.find("PR", 5).comment == "conveyor pick"
+        t2, added, updated, refused = table.apply_edits(
+            t, [{"type": "PR", "index": 5, "comment": "main pick point"}])
+        assert added == [] and refused == []
+        assert [(e.type, e.index) for e in updated] == [("PR", 5)]
+        assert t2.find("PR", 5).comment == "main pick point"
+        assert t2.find("PR", 5).initialized is True   # taught state kept
+        assert t.find("PR", 5).comment == "conveyor pick"   # input intact
+
+    def test_identical_update_is_a_noop(self):
+        t, _ = materialize("line3_fanuc1", CSV)
+        t2, added, updated, _ = table.apply_edits(
+            t, [{"type": "PR", "index": 5, "comment": "conveyor pick"}])
+        assert added == [] and updated == [] and t2 is t
 
     def test_io_direction_and_bad_entries(self):
         t, _ = materialize("line3_fanuc1", CSV)
-        t2, added, refused = table.with_additions(t, [
+        t2, added, updated, refused = table.apply_edits(t, [
             {"type": "DO", "index": 9, "comment": "spare lamp"},
             {"type": "XX", "index": 1},
             {"type": "DO", "index": 0}])
@@ -141,7 +150,7 @@ class TestAdditions:
 
     def test_value_recorded_and_round_trips(self):
         t, _ = materialize("line3_fanuc1", CSV)
-        t2, added, _ = table.with_additions(t, [
+        t2, added, updated, _ = table.apply_edits(t, [
             {"type": "DO", "index": 100, "comment": "dispenser on",
              "value": "OFF"}])
         assert t2.find("DO", 100).value == "OFF"
@@ -151,13 +160,13 @@ class TestAdditions:
         assert len(back.entries) == len(t2.entries)
         assert back.cell_id == t2.cell_id
 
-    def test_duplicate_within_request_added_once(self):
+    def test_duplicate_within_request_last_wins_as_update(self):
         t, _ = materialize("line3_fanuc1", CSV)
-        t2, added, refused = table.with_additions(t, [
+        t2, added, updated, refused = table.apply_edits(t, [
             {"type": "R", "index": 40, "comment": "a"},
             {"type": "R", "index": 40, "comment": "b"}])
-        assert len(added) == 1 and "already exists" in refused[0]
-        assert t2.find("R", 40).comment == "a"
+        assert len(added) == 1 and len(updated) == 1 and refused == []
+        assert t2.find("R", 40).comment == "b"
 
 
 class TestSession:

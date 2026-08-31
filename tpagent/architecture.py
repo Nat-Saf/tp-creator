@@ -102,9 +102,10 @@ FLOW = [
              "notes and applies the gap policy - use a default, infer with "
              "a note, or ask. An ambiguous or missing pick/place position "
              "always comes back as a question. On an explicit user request "
-             "it can also add NEW table entries (or answer a table-only "
-             "edit without generating a program) - existing rows are never "
-             "overridden, and the updated table travels back to the "
+             "it can also edit the conversation's table - add new entries "
+             "or update an existing note/value - without generating a "
+             "program; the loaded file and the built-in default are never "
+             "modified, and the updated table travels back to the "
              "caller."},
     {"step": 4, "title": "Retrieval",
      "modules": [modules.RUNTIME, modules.RAG_RETRIEVE, modules.RAG_EMBED],

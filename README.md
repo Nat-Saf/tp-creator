@@ -38,10 +38,11 @@ numbered flow below.
 3. **Intake** - LLM1-Intake maps the user's words to real registers and
    IO through their pendant notes and applies the gap policy: use a
    default, infer with a note, or ask. On an explicit user request
-   ("add PR[2]", "add DO[100] 'dispenser on'") it adds NEW entries to the
-   conversation's table - or answers a table-only edit without generating
-   any program. Existing rows are never overridden, new registers start
-   untaught, and the updated table travels back to the page.
+   ("add PR[2]", "add description to PR[10]") it edits the conversation's
+   table - adding new entries (untaught) or updating an existing
+   note/value - without generating any program. The loaded file and the
+   built-in default are never modified; the updated table travels back
+   to the page and reverts when the conversation ends.
 4. **Retrieval** - the Runtime always fetches TP-syntax documentation
    before the first draft (RAG-Retrieve over the Pinecone index that
    RAG-Embed built offline from our own-words notes in
@@ -129,9 +130,10 @@ Follow-ups understand **edits** ("change line 13 to move to PR[10]" -
 the previous program is edited minimally, not re-invented), **relative
 moves** ("move down by 100mm" - implemented with a scratch position
 register the agent asks you to choose), and **table edits** ("add
-DO[100] 'dispenser on'" - the entry joins the conversation's table,
-visible under Show table and saveable as CSV; New task reverts
-conversation edits to the loaded file).
+DO[100] 'dispenser on'", "add description to PR[10]" - new entries and
+note/value updates join the conversation's table, visible under Show
+table and saveable as CSV; New task reverts conversation edits to the
+loaded file).
 
 ## API
 
@@ -171,7 +173,9 @@ Useful dev commands: `python -m tpagent.validator.verdict <file.ls> [--scan
 <reg_io.csv>]` validates any program; `python -m tpagent.rag.index` rebuilds
 the Pinecone index from `corpus/prepared/`; `python -m tpagent.architecture`
 regenerates the diagram; `scripts/build_agent_info.py` refreshes the recorded
-examples.
+examples; `scripts/eval_prompts.py` runs the 21-scenario live prompt-quality
+eval (spends ~$0.3-0.5 of tokens - property checks on realistic
+conversations, results in `out/eval.json`).
 
 Development defaults to mock models (`TP_LLM2=mock:tests/fixtures/v1.ls`);
 live models run only for explicit smoke tests. The FANUC manuals used as

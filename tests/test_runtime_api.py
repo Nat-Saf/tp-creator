@@ -63,7 +63,7 @@ class TestHandle:
 
     def test_user_requested_table_addition(self, env, monkeypatch):
         # "add pr2 to the table": the runtime merges the new entry (so the
-        # validator accepts PR[2]) but refuses the override of PR[5]
+        # validator accepts PR[2]) and updates PR[5]'s note in-conversation
         monkeypatch.setenv("TP_LLM1", "mock:tests/fixtures/llm1_add.json,"
                                       "tests/fixtures/llm1_audit.json")
         monkeypatch.setenv("TP_LLM2", "mock:tests/fixtures/move_p2.ls")
@@ -78,7 +78,7 @@ class TestHandle:
         assert "PR[2:position 2]" in resp.program_ls
         ads = " ".join(resp.report.advisories)
         assert "added PR[2]" in ads                 # the addition, reported
-        assert "PR[5] already exists" in ads        # the override, refused
+        assert "updated PR[5]" in ads               # the update, reported
         assert resp.report.positions["PR[2]"] == "note 'position 2'"
 
     def test_edit_table_turn_changes_no_program(self, env, monkeypatch):

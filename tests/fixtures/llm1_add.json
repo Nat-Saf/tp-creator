@@ -8,6 +8,6 @@
  "inferred": [{"text": "add pr2 to the table",
                "decision": "added PR[2] 'position 2' as a new untaught entry"}],
  "table_add": [{"type": "PR", "index": 2, "comment": "position 2"},
-               {"type": "PR", "index": 5, "comment": "override attempt"}],
+               {"type": "PR", "index": 5, "comment": "main pick point"}],
  "base_draft": null,
  "fix_guidance": null}

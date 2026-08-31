@@ -86,19 +86,22 @@ def parse_scan(raw_csv: str) -> RegIOTable:
     return parse_reg_io_csv(raw_csv)
 
 
-def with_additions(table: RegIOTable, additions: list) \
-        -> tuple[RegIOTable, list[Entry], list[str]]:
-    """Owner decision (2026-08-31): on an EXPLICIT user request the agent
-    may ADD new entries to the working table for this run. Existing
-    indexes are NEVER overridden, and nothing is written back to any
-    table file - the advisory tells the user to add the row for keeps.
+def apply_edits(table: RegIOTable, edits: list) \
+        -> tuple[RegIOTable, list[Entry], list[Entry], list[str]]:
+    """Owner decision (2026-08-31, supersedes add-only): on an EXPLICIT
+    user request the conversation's table may gain NEW entries or UPDATE
+    existing ones (note and/or value; a register's taught state is kept).
+    The loaded file and the bundled default are NEVER modified - the
+    edited table lives in the conversation and reverts when it ends.
 
-    Returns (table', accepted entries, refusal notes). The input table
-    is never mutated - the default table is a shared cached object."""
-    taken = table.key_set()
-    accepted: list[Entry] = []
+    Returns (table', added, updated, refusal notes). The input table is
+    never mutated - the default table is a shared cached object."""
+    entries = list(table.entries)
+    where = {(e.type, e.index): i for i, e in enumerate(entries)}
+    added: list[Entry] = []
+    updated: list[Entry] = []
     refused: list[str] = []
-    for raw in additions:
+    for raw in edits:
         if not isinstance(raw, dict):
             continue
         t = str(raw.get("type") or "").strip().upper()
@@ -120,23 +123,35 @@ def with_additions(table: RegIOTable, additions: list) \
                 f"I couldn't add {t}[{raw.get('index')}] - the index must "
                 f"be a positive number.")
             continue
-        if (t, idx) in taken:
-            refused.append(
-                f"{t}[{idx}] already exists in your table, so I kept the "
-                f"existing entry - loaded rows are never overwritten.")
-            continue
-        taken.add((t, idx))
-        accepted.append(Entry(
-            type=t, index=idx,
-            comment=str(raw.get("comment") or "").strip(),
-            initialized=init, value=str(raw.get("value") or "").strip(),
-            category=cat, direction=direction))
-    if not accepted:
-        return table, [], refused
+        comment = raw.get("comment")
+        value = raw.get("value")
+        key = (t, idx)
+        if key in where:                    # update note/value, keep the rest
+            old = entries[where[key]]
+            new = Entry(
+                type=old.type, index=old.index,
+                comment=(str(comment).strip() if comment is not None
+                         else old.comment),
+                initialized=old.initialized,
+                value=(str(value).strip() if value is not None
+                       else old.value),
+                category=old.category, direction=old.direction)
+            if new != old:
+                entries[where[key]] = new
+                updated.append(new)
+        else:
+            e = Entry(type=t, index=idx,
+                      comment=str(comment or "").strip(),
+                      initialized=init, value=str(value or "").strip(),
+                      category=cat, direction=direction)
+            entries.append(e)
+            where[key] = len(entries) - 1
+            added.append(e)
+    if not added and not updated:
+        return table, [], [], refused
     merged = RegIOTable(cell_id=table.cell_id, scanned_at=table.scanned_at,
-                        entries=[*table.entries, *accepted],
-                        flags=list(table.flags))
-    return merged, accepted, refused
+                        entries=entries, flags=list(table.flags))
+    return merged, added, updated, refused
 
 
 @lru_cache(maxsize=8)
