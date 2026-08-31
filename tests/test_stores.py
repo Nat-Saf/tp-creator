@@ -26,8 +26,11 @@ class TestMaterialize:
     def test_default_table_serves_when_no_scan(self):
         t, source = materialize("line3_fanuc1", None)
         assert source == "default_table"
-        assert len(t.entries) == 25
+        assert len(t.entries) == 148
         assert t.find("PR", 5).comment == "conveyor pick"
+        assert t.find("PR", 10).initialized is False   # scratch stays free
+        assert t.find("DO", 2).comment == "camera trigger"
+        assert t.find("PR", 2) is None       # reserved for the add flows
 
     def test_blank_scan_falls_to_default(self):
         _, source = materialize("line3_fanuc1", "   \n ")

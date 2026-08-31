@@ -227,7 +227,7 @@ class TestApiExecute:
         r = TestClient(app).get("/")
         assert r.status_code == 200
         assert "text/html" in r.headers["content-type"]
-        for marker in ("Run Agent", "New task", "textarea",
+        for marker in (">Run<", "New task", "textarea",
                        "/api/execute", "Steps trace",
                        "Load registers/IO table", "Show table"):
             assert marker in r.text, marker

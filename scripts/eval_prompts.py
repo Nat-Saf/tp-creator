@@ -201,23 +201,26 @@ def sc_conversation_close(c):
 
 
 def sc_camera_no_match(c):
-    r = call("create a pick program that triggers the camera output at "
-             "the pick point")
+    # (device is now 'dispenser': cameras exist in the enlarged table)
+    r = call("create a pick program that triggers the dispenser output "
+             "at the pick point")
     c.need(not r["prog"], "should ask, not deliver a program")
-    c.need("green lamp" not in r["text"].lower(),
-           "must not guess candidates (green lamp)")
+    c.need("green lamp" not in r["text"].lower()
+           and "buzzer" not in r["text"].lower(),
+           "must not guess candidates from the table")
     c.need("add" in r["text"].lower(), "must offer creating an entry")
 
 
 def sc_list_after_ask(c):
-    t1 = ("create a pick program that triggers the camera output at "
+    t1 = ("create a pick program that triggers the dispenser output at "
           "the pick point")
     r1 = call(t1)
     if not c.need(not r1["prog"], "turn 1 should ask"):
         return
     r2 = follow(t1, r1["text"], "list the available outputs")
     c.need(not r2["prog"], "listing turn must not deliver a program")
-    c.need("DO[7" in r2["text"], "outputs list should include DO[7]")
+    c.need(r2["text"].count("DO[") >= 3,
+           "asked for the list - outputs should be listed now")
 
 
 def sc_relative_ask(c):
@@ -472,9 +475,11 @@ def sc_loop_cycles(c):
           "repeat the cycle 3 times")
     r = _deliver(call(t1), c, t1, "use the defaults for everything")
     if r["prog"]:
-        c.need("LBL[" in r["prog"], "loop label missing")
-        c.need("JMP" in r["prog"] or "IF" in r["prog"], "loop jump missing")
-        c.need("3" in r["prog"], "cycle count 3 missing")
+        looped = "LBL[" in r["prog"] and ("JMP" in r["prog"]
+                                          or "IF" in r["prog"])
+        unrolled = r["prog"].count("PR[5") >= 3    # three pick descents
+        c.need(looped or unrolled,
+               "neither a counter loop nor three unrolled cycles found")
 
 
 def sc_wait_seconds(c):

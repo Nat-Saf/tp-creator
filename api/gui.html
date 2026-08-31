@@ -146,7 +146,7 @@
   <div id="hint">
     <p>Describe the program you need &mdash; e.g.
        &ldquo;pick a part from the conveyor and put it on fixture A,
-       gently&rdquo; &mdash; then press Run Agent (or just Enter).</p>
+       gently&rdquo; &mdash; then press Run (or just Enter).</p>
     <p>You can load your own registers/IO table (.csv) with the button
        below &mdash; without one, the built-in cell table is used.
        &ldquo;Show table&rdquo; displays the active table and lets you
@@ -176,7 +176,7 @@
 </div>
 <div class="wrap">
   <textarea id="prompt" placeholder="Describe the task, or answer my question&hellip; (Enter runs, Shift+Enter = new line)"></textarea>
-  <button id="run">Run Agent</button>
+  <button id="run">Run</button>
   <button id="newtask" title="Forget this conversation">New task</button>
 </div></div>
 
@@ -569,7 +569,7 @@ document.getElementById("rawexec").addEventListener("click", function () {
       c.appendChild(el("pre", "", JSON.stringify(lastExecute, null, 2)));
     } else {
       c.appendChild(el("div", "msg",
-        "No run yet - press Run Agent first, then this button shows the " +
+        "No run yet - press Run first, then this button shows the " +
         "raw JSON the endpoint returned."));
     }
   });

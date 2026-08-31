@@ -97,7 +97,7 @@ conversation - nothing is ever written back to a table file.
 
 ## Try it
 
-Open the root URL, type a task, press **Run Agent**. You can also **load
+Open the root URL, type a task, press **Run**. You can also **load
 your own registers/IO table** (a `.csv` - either the strict `reg_io_v1`
 export or a simple `type,index,comment` sheet saved as CSV) with the button
 above the prompt box; without one, the built-in default table is used. The
@@ -113,7 +113,13 @@ default cell (`line3_fanuc1`) understands these pendant-note words:
 | gripper closed feedback | RI[1] |
 | part present / conveyor running | DI[3] / DI[4] |
 | green lamp | DO[7] |
+| camera on / camera trigger | DO[1] / DO[2] |
 | cycle count / part counter | R[1] / R[3] |
+
+...plus ~150 initialized demo entries in total - lamps and cameras,
+UOP signals, pallet patterns, group and analog IO, string registers
+with barcodes and error codes, numeric constants. Press **Show table**
+to browse them all.
 
 Example prompts:
 

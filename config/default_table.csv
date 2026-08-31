@@ -1,6 +1,6 @@
 # schema: reg_io_v1
 # cell_id: line3_fanuc1
-# scanned_at: 2026-07-04T10:42:00
+# scanned_at: 2026-08-31T12:00:00
 # source: fanuc_web
 # notes: UTF-8, comma delimiter, double-quote quoting, header row required.
 # notes: '#' lines are metadata, stripped before CSV parsing.
@@ -15,21 +15,144 @@ PR,7,fixture A approach,TRUE,"C: 291.0,220.5,160.0,180.0,0.0,90.0"
 PR,8,fixture A place,TRUE,"C: 291.0,220.5,95.0,180.0,0.0,90.0"
 PR,9,fixture B place,TRUE,"C: 291.0,-220.5,95.0,180.0,0.0,-90.0"
 PR,10,,FALSE,
+PR,13,fixture B approach,TRUE,"C: 291.0,-220.5,160.0,180.0,0.0,-90.0"
+PR,14,safe travel point,TRUE,"C: 400.0,0.0,320.0,180.0,0.0,0.0"
+PR,16,purge station,TRUE,"C: 150.0,-350.0,120.0,180.0,0.0,-45.0"
+PR,17,camera inspection pose,TRUE,"C: 350.0,80.0,240.0,180.0,0.0,30.0"
 R,1,cycle count,TRUE,1042
 R,3,part counter,TRUE,12
 R,4,,TRUE,0
+R,5,travel speed mm/sec,TRUE,100
+R,6,contact speed mm/sec,TRUE,50
+R,7,settle time x100ms,TRUE,5
+R,8,retry limit,TRUE,3
+R,10,parts per pallet,TRUE,12
+R,11,batch size,TRUE,48
+R,12,reject count,TRUE,0
 SR,1,barcode buffer,TRUE,ABC-1042
 SR,2,"recipe name, active",TRUE,PICKPLACE_A
+SR,3,last error code,TRUE,E000
+SR,4,current barcode,TRUE,BC-0000
+SR,5,operator name,TRUE,LINE3
+SR,6,active recipe,TRUE,RECIPE_A
+SR,7,last fault text,TRUE,NONE
+SR,8,lot number,TRUE,LOT-2481
+SR,9,shift code,TRUE,DAY
+SR,10,program version,TRUE,V1.1
 PL,1,pallet A pattern,TRUE,"[1,1,1]"
+PL,2,pallet B pattern,TRUE,"[2,2,1]"
+PL,3,euro pallet 4x3,TRUE,"[4,3,1]"
+PL,4,euro pallet 4x3x2,TRUE,"[4,3,2]"
+PL,5,tray 5x4,TRUE,"[5,4,1]"
+PL,6,tray 6x4 double,TRUE,"[6,4,2]"
+PL,7,box grid 3x3x3,TRUE,"[3,3,3]"
+PL,8,single row 8,TRUE,"[8,1,1]"
+PL,9,double row 6,TRUE,"[6,2,1]"
+PL,10,test pattern,TRUE,"[1,1,1]"
+DI,1,door closed,-,ON
+DI,2,air pressure ok,-,ON
 DI,3,part present,-,ON
 DI,4,conveyor running,-,OFF
+DI,5,fixture A occupied,-,OFF
+DI,6,fixture B occupied,-,OFF
 DI,7,,-,OFF
+DI,8,pallet in place,-,ON
+DI,9,operator start button,-,OFF
+DI,10,safety curtain clear,-,ON
+DO,1,camera on,-,OFF
+DO,2,camera trigger,-,OFF
+DO,3,red lamp,-,OFF
+DO,4,yellow lamp,-,OFF
+DO,5,buzzer,-,OFF
+DO,6,conveyor start,-,OFF
 DO,7,green lamp,-,OFF
+DO,8,cooling fan,-,OFF
+DO,9,part reject pusher,-,OFF
+DO,10,cell running lamp,-,ON
 RI,1,gripper closed feedback,-,OFF
+RI,2,gripper open feedback,-,ON
+RI,3,part in gripper,-,OFF
+RI,4,tool locked,-,ON
+RI,5,vacuum ok,-,OFF
+RI,6,collision sensor ok,-,ON
+RI,7,tool id bit 1,-,OFF
+RI,8,tool id bit 2,-,ON
 RO,1,gripper close,-,OFF
 RO,2,gripper open,-,ON
+RO,3,tool changer lock,-,OFF
+RO,4,vacuum valve,-,OFF
+RO,5,air nozzle,-,OFF
+RO,6,part hold clamp,-,OFF
+RO,7,spare output 7,-,OFF
+RO,8,spare output 8,-,OFF
+UI,1,imstp,-,ON
+UI,2,hold,-,ON
+UI,3,sfspd,-,ON
+UI,4,cycle stop,-,OFF
 UI,5,,-,ON
+UI,6,start,-,OFF
+UI,7,home,-,OFF
+UI,8,enable,-,ON
+UI,9,pns select 1,-,OFF
+UI,10,pns select 2,-,OFF
 UO,1,cmd enabled,-,ON
+UO,2,system ready,-,ON
+UO,3,program running,-,OFF
+UO,4,program paused,-,OFF
+UO,5,motion held,-,OFF
+UO,6,fault,-,OFF
+UO,7,at perch,-,ON
+UO,8,tp enabled,-,OFF
+UO,9,battery alarm,-,OFF
+UO,10,busy,-,OFF
 GI,1,part type code,-,3
+GI,2,pallet layer select,-,1
+GI,3,recipe select,-,2
+GI,4,station id,-,3
+GI,5,tray column count,-,5
+GI,6,tray row count,-,4
+GI,7,conveyor speed code,-,2
+GI,8,part size code,-,1
+GI,9,batch count low,-,48
+GI,10,batch count high,-,0
+GO,1,cycle count echo,-,1042
+GO,2,error code out,-,0
+GO,3,active recipe out,-,2
+GO,4,parts done low,-,12
+GO,5,parts done high,-,0
+GO,6,station status,-,1
+GO,7,reject count out,-,0
+GO,8,layer number out,-,1
+GO,9,heartbeat counter,-,7
+GO,10,part type echo,-,3
 AI,1,vacuum pressure,-,0.82
+AI,2,gripper force,-,12.5
+AI,3,air pressure bar,-,6.1
+AI,4,motor temp C,-,41.0
+AI,5,ambient temp C,-,24.5
+AI,6,conveyor speed mm/sec,-,180.0
+AI,7,part weight g,-,250.0
+AI,8,laser distance mm,-,87.3
+AI,9,vibration level,-,0.03
+AI,10,supply voltage V,-,23.9
+AO,1,conveyor speed set,-,180.0
+AO,2,nozzle pressure set,-,4.0
+AO,3,lamp brightness set,-,80.0
+AO,4,vacuum level set,-,0.75
+AO,5,spindle speed set,-,0.0
+AO,6,fan speed set,-,50.0
+AO,7,heater setpoint C,-,35.0
+AO,8,spare analog out 1,-,0.0
+AO,9,spare analog out 2,-,0.0
+AO,10,camera focus set,-,12.0
+F,1,auto mode,-,ON
+F,2,dry run mode,-,OFF
+F,3,skip inspection,-,OFF
+F,4,first cycle,-,ON
+F,5,pallet complete,-,OFF
+F,6,maintenance due,-,OFF
+F,7,camera enabled,-,ON
+F,8,use fixture B,-,OFF
+F,9,batch done,-,OFF
+F,10,error latched,-,OFF
 F,12,cycle active flag,-,OFF
