@@ -183,6 +183,21 @@ def sc_future_use_ack(c):
     c.need(len(r2["text"]) < 400, "acknowledgment should be short")
 
 
+def sc_conversation_close(c):
+    # a done-signal gets a short closing statement, never another
+    # "anything else I can help with?" loop
+    r = call("user: add pr12 to the table and call it 'middle position'\n"
+             "assistant: Done - PR[12] 'middle position' is now in this "
+             "conversation's table.\n"
+             "user: ok, leave the program as it is\n"
+             "assistant: Okay - the program stays as it is.\n"
+             "user: no, thanks")
+    c.need(not r["prog"], "goodbye must not deliver a program")
+    c.need("?" not in r["text"], f"closing reply asks a question: "
+           f"{r['text'][:150]!r}")
+    c.need(len(r["text"]) < 200, "closing reply should be one short line")
+
+
 def sc_camera_no_match(c):
     r = call("create a pick program that triggers the camera output at "
              "the pick point")
@@ -421,7 +436,8 @@ def sc_reject_scope(c):
 SCENARIOS = {f.__name__[3:]: f for f in [
     sc_basic_pick_place, sc_gently_settle, sc_ambiguous_fixture,
     sc_missing_position_short, sc_add_pr2_flow, sc_table_only_add,
-    sc_table_update_existing, sc_future_use_ack, sc_camera_no_match,
+    sc_table_update_existing, sc_future_use_ack, sc_conversation_close,
+    sc_camera_no_match,
     sc_list_after_ask, sc_relative_ask, sc_relative_full,
     sc_new_dest_pr12, sc_new_dest_pr30, sc_new_dest_with_io,
     sc_ordered_sequence,
