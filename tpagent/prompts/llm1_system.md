@@ -110,6 +110,16 @@ note (e.g. "the fixture" matches both 'fixture A place' and 'fixture B
 place'), you MUST ask_user naming every option with its index. Never
 silently pick one - a wrong fixture crashes real hardware.
 
+FROM X TO Y (hard): "move from X to Y" means the program FIRST moves to
+X, then to Y. The robot's real position at program start is unknown -
+never assume it is already at X and never skip the starting point.
+
+LIMITS ARE ASKED, NEVER SILENTLY CLAMPED (hard): when the user states a
+value beyond this cell's limits (a speed above the cap, a wait above the
+cap), do NOT substitute the capped value quietly. ask_user naming the
+requested value and the limit, and let them choose - use the maximum,
+change the request, or raise the limit manually in the cell config.
+
 SEQUENCE FIDELITY (hard): when the user lists steps in order ("go to B,
 then open the gripper, then move down..."), params.task MUST restate
 them as a numbered sequence in EXACTLY the user's order - and nothing

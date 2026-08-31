@@ -666,17 +666,44 @@ def sc_report_source_default(c):
 
 
 def sc_wait_limit(c):
-    t1 = ("pick from the conveyor to fixture A and wait 30 seconds "
+    # 240s is over the 120s cell limit: must ASK naming the limit, or at
+    # least never deliver a silently clamped wait
+    t1 = ("pick from the conveyor to fixture A and wait 4 minutes "
           "after closing the gripper")
     r = call(t1)
     if r["prog"]:
         waits = [float(w) for w in
                  re.findall(r"WAIT\s+(\d+(?:\.\d+)?)", r["prog"])]
-        c.need(waits and max(waits) <= 10,
-               f"wait over the 10s limit delivered: {max(waits) if waits else '?'}")
+        c.need(waits and max(waits) >= 240,
+               "a clamped wait was silently delivered - should have asked")
     else:
-        c.need("10" in r["text"] or "limit" in r["text"].lower(),
-               "refusal/question should mention the wait limit")
+        c.need("120" in r["text"] or "limit" in r["text"].lower(),
+               "question should name the wait limit")
+
+
+def sc_wait_minute(c):
+    # the reported bug: 'wait for a minute' silently became 10 seconds
+    t1 = ("move from home to conveyor approach, turn the camera on, "
+          "wait for a minute, turn the camera off, then return home")
+    r = _deliver(call(t1), c, t1, "use the defaults")
+    if r["prog"]:
+        c.need(re.search(r"WAIT\s+60\.\d{1,2}\(sec\)", r["prog"]),
+               "the full 60 second wait is missing")
+        c.need("DO[1" in r["prog"] or "DO[2" in r["prog"],
+               "camera output missing")
+
+
+def sc_from_a_to_b(c):
+    # 'from X to Y' must move to X first - the start position is unknown
+    t1 = ("move the robot from conveyor approach to fixture A place")
+    r = _deliver(call(t1), c, t1, "use the defaults")
+    if r["prog"]:
+        motions = re.findall(r"[JL]\s+PR\[(\d+)[,:\]]", r["prog"])
+        c.need("6" in motions and "8" in motions,
+               f"both points must be visited, got PR{motions}")
+        if "6" in motions and "8" in motions:
+            c.need(motions.index("6") < motions.index("8"),
+                   "must move to the FROM point before the TO point")
 
 
 def sc_dangerous_scope(c):
@@ -760,7 +787,8 @@ SCENARIOS = {f.__name__[3:]: f for f in [
     sc_edit_remove_lamp, sc_edit_rename, sc_edit_change_fixture,
     sc_multi_turn_edit_chain, sc_table_add_two, sc_table_update_value,
     sc_show_options_flow, sc_table_then_program, sc_bare_table_add,
-    sc_report_source_default, sc_wait_limit, sc_dangerous_scope,
+    sc_report_source_default, sc_wait_limit, sc_wait_minute,
+    sc_from_a_to_b, sc_dangerous_scope,
     sc_two_questions_flow, sc_typos, sc_polite_noise, sc_empty_prompt,
     sc_gibberish,
 ]}

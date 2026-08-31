@@ -52,7 +52,10 @@ Hard rules:
 - Comments describe the motion or process step - NEVER table bookkeeping
   (no "added PR[12] to the table" lines; the report covers that).
 - Apply EVERY numeric the TASK section states (distances, speeds, waits) -
-  do not substitute a taught position for a stated relative distance.
+  do not substitute a taught position for a stated relative distance, and
+  NEVER write a comment claiming one value while the code uses another.
+- "From X to Y" starts by moving to X, then to Y - never assume the robot
+  is already at X.
 - Execute the TASK steps in EXACTLY the stated order - never reorder and
   never add steps: no extra transport moves, no revisiting positions, no
   release the task didn't ask for. If the task doesn't say to open the

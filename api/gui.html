@@ -116,6 +116,18 @@
   #hint p:first-child { color: var(--text); font-weight: 600; }
   .running { color: var(--sub); font-size: .88rem; }
   .tablenote { color: var(--sub); font-size: .84rem; margin-bottom: 8px; }
+  #tablepanel { display: none; position: fixed; top: 0; right: 0;
+                bottom: 0; width: 50vw; background: var(--card);
+                border-left: 1px solid var(--border); z-index: 40;
+                overflow-y: auto; padding: 14px 16px; }
+  body.table-open #tablepanel { display: block; }
+  body.table-open #composer { right: 50vw; }
+  body.table-open { padding-right: 50vw; }
+  #tablepanel h3 { font-size: .78rem; font-weight: 700;
+                   letter-spacing: .06em; text-transform: uppercase;
+                   color: var(--sub); margin: 2px 0 10px; }
+  #closetable { float: right; background: var(--btn); color: var(--text);
+                padding: 4px 12px; font-weight: 700; }
   .regtable { overflow-x: auto; margin: 4px 0; }
   .regtable table { border-collapse: collapse; width: 100%;
                     font-size: .84rem; }
@@ -165,6 +177,12 @@
        and run &mdash; no integration work needed.</p>
   </div>
 </main>
+
+<div id="tablepanel">
+  <button id="closetable" title="Close the table panel">&times;</button>
+  <h3>Registers / IO table</h3>
+  <div id="tablepanelbody"></div>
+</div>
 
 <div id="composer">
 <div id="tablebar">
@@ -383,13 +401,7 @@ async function run() {
           : "table: edited in conversation";
         tableChip.style.display = "inline-block";
         shown = shown.slice(0, tcut);
-        if (apiCardKey === "showtable") {   // an open table view is stale
-          apiCard.remove();
-          apiCard = null;
-          apiCardKey = null;
-          document.querySelectorAll("button.api.active").forEach(
-            function (b) { b.classList.remove("active"); });
-        }
+        if (tablePanelOpen) renderTablePanel();   // keep the panel fresh
       }
       // remember the delivered program so "edit it" turns can send it
       const pcut = shown.indexOf("\n--- report ---\n");
@@ -482,46 +494,64 @@ document.getElementById("cleartable").addEventListener("click", function () {
   tableMsg.textContent = "";
 });
 
-document.getElementById("showtable").addEventListener("click", function () {
-  toggleApiCard("showtable", "Registers / IO table", async function (c) {
-    try {
-      let csv = tableCsv, name = tableCsvName, note;
-      if (csv) {
-        note = "This conversation's table - it is sent with every run.";
-      } else {
-        const r = await fetch("/api/table");
-        const data = await r.json();
-        if (!data.csv) {
-          c.appendChild(el("div", "msg",
-            "No table is loaded and no built-in default is available - "
-            + "the robot is treated as empty (any index is usable)."));
-          return;
-        }
-        csv = data.csv;
-        name = "default_table.csv";
-        note = "The built-in default table (cell '" + data.cell_id
-             + "') - used whenever no table is uploaded.";
+const tablePanelBody = document.getElementById("tablepanelbody");
+let tablePanelOpen = false;
+
+function closeTablePanel() {
+  tablePanelOpen = false;
+  document.body.classList.remove("table-open");
+  document.getElementById("showtable").classList.remove("active");
+}
+
+async function renderTablePanel() {
+  tablePanelBody.textContent = "";
+  try {
+    let csv = tableCsv, name = tableCsvName, note;
+    if (csv) {
+      note = "This conversation's table - it is sent with every run.";
+    } else {
+      const r = await fetch("/api/table");
+      const data = await r.json();
+      if (!data.csv) {
+        tablePanelBody.appendChild(el("div", "msg",
+          "No table is loaded and no built-in default is available - "
+          + "the robot is treated as empty (any index is usable)."));
+        return;
       }
-      c.appendChild(el("div", "tablenote", note));
-      c.appendChild(regTableFromCsv(csv));
-      const save = el("button", "save", "Save table (.csv)");
-      save.addEventListener("click", function () {
-        saveFile(csv, name, "text/csv");
-      });
-      c.appendChild(save);
-    } catch (err) {
-      c.appendChild(el("div", "msg", "The table could not be loaded."));
+      csv = data.csv;
+      name = "default_table.csv";
+      note = "The built-in default table (cell '" + data.cell_id
+           + "') - used whenever no table is uploaded.";
     }
-    scrollDown();
-  });
+    tablePanelBody.appendChild(el("div", "tablenote", note));
+    const save = el("button", "save", "Save table (.csv)");
+    save.addEventListener("click", function () {
+      saveFile(csv, name, "text/csv");
+    });
+    tablePanelBody.appendChild(save);
+    tablePanelBody.appendChild(regTableFromCsv(csv));
+  } catch (err) {
+    tablePanelBody.appendChild(
+      el("div", "msg", "The table could not be loaded."));
+  }
+}
+
+document.getElementById("showtable").addEventListener("click", function () {
+  if (tablePanelOpen) { closeTablePanel(); return; }
+  tablePanelOpen = true;
+  document.body.classList.add("table-open");
+  this.classList.add("active");
+  renderTablePanel();
 });
+document.getElementById("closetable").addEventListener("click",
+                                                       closeTablePanel);
 
 let apiCard = null;      // one endpoint response shown at a time
 let apiCardKey = null;   // which button opened it - 2nd push closes it
 
 function toggleApiCard(key, title, build) {
   document.querySelectorAll("button.api.active").forEach(function (b) {
-    b.classList.remove("active");
+    if (b.id !== "showtable") b.classList.remove("active");
   });
   if (apiCard) {
     apiCard.remove();

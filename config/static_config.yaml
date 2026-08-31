@@ -9,7 +9,8 @@ defaults:
   gripper_settle_sec: 0.5
 limits:
   max_speed_mmsec: 250
-  max_wait_sec: 10
+  max_wait_sec: 120   # owner change 2026-08-31 (was 10): process waits
+                      # like camera warm-up legitimately run a minute+
 retry:
   max_attempts: 3
 llm:
