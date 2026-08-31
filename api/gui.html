@@ -321,6 +321,26 @@ function transcriptWith(text) {
               .join("\n") + "\nuser: " + text;
 }
 
+// the pipeline's stages in their real order; thresholds follow typical
+// timings so the narration matches what the agent is actually doing
+const STAGES = [
+  [0,   "Reading your request and the cell table"],
+  [6,   "Mapping your words to registers and IO"],
+  [14,  "Retrieving TP syntax documentation"],
+  [20,  "Writing the program draft"],
+  [42,  "Validating grammar, registers and safety limits"],
+  [50,  "Running the semantic review"],
+  [70,  "Refining the draft - a correction round is under way"],
+  [120, "Still working - complex request, retries under way"],
+  [200, "Almost there - finishing the checks"]
+];
+
+function stageFor(sec) {
+  let label = STAGES[0][1];
+  for (const [t, s] of STAGES) if (sec >= t) label = s;
+  return label;
+}
+
 async function run() {
   const text = promptBox.value.trim();
   if (!text || busy) return;
@@ -329,13 +349,13 @@ async function run() {
   promptBox.value = "";
   card("user", "You").appendChild(el("div", "msg", text));
   const status = card("assistant", "TP Creator");
-  const line = el("div", "running", "Running the agent… 0s");
+  const line = el("div", "running", stageFor(0) + "… 0s");
   status.appendChild(line);
   scrollDown();
   const t0 = Date.now();
   const tick = setInterval(function () {
-    line.textContent = "Running the agent… " +
-      Math.round((Date.now() - t0) / 1000) + "s";
+    const s = Math.round((Date.now() - t0) / 1000);
+    line.textContent = stageFor(s) + "… " + s + "s";
   }, 1000);
   try {
     const payload = { prompt: transcriptWith(text) };
