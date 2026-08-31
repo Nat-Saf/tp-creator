@@ -102,7 +102,10 @@ def agent_info() -> dict:
             "and a deterministic three-layer validator (grammar, register "
             "existence, safety limits) checks every draft before delivery; "
             "a mandatory audit adds human-review advisories, and every "
-            "model call is traced in the steps array.",
+            "model call is traced in the steps array. The output is a "
+            "robot-ready pair - the .ls program and its matching "
+            "registers/IO table (CSV) - that loads straight onto an "
+            "actual robot with no integration work.",
         "purpose":
             "Let a robotics engineer get a runnable, cell-aware "
             "pick-and-place style TP program - with safety advisories and "

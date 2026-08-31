@@ -128,7 +128,7 @@
 <body>
 <header><div class="wrap">
   <h1>TP Creator</h1>
-  <span>plain words in &rarr; validated FANUC TP program out</span>
+  <span>plain words in &rarr; robot-ready TP program + registers/IO table</span>
   <button id="theme" title="Switch between dark and light mode">&#127769; Dark</button>
 </div></header>
 
@@ -160,6 +160,9 @@
     <p>Every delivered program comes with a Save (.ls) button, a folded
        report with safety advisories, and the full steps trace. The
        buttons at the top show the live API endpoint responses.</p>
+    <p>Everything is robot-ready: save the program (.ls) and the table
+       (.csv), load both on the actual robot, teach the marked positions
+       and run &mdash; no integration work needed.</p>
   </div>
 </main>
 

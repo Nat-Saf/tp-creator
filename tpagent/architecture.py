@@ -62,7 +62,9 @@ F_NOTE = _font(21, bold=True)
 
 INTRO = [
     "TP Creator turns one plain sentence into a validated FANUC TP (.LS) "
-    "program. The design splits the work between two narrow AI roles and "
+    "program plus its matching registers/IO table - a robot-ready pair "
+    "you load straight onto an actual robot and run, with no integration "
+    "work. The design splits the work between two narrow AI roles and "
     "one deterministic machine, so everything creative is reviewable and "
     "everything mechanical is guaranteed.",
 
@@ -334,8 +336,8 @@ def generate() -> None:
     _box(d, 274, 1400, 320, 100, "Steps recorder",
          "every model call, in order", fill=CORAL)
 
-    out = _box(d, 700, 1570, 500, 100, "Validated .ls + report",
-               "exact course shape out", fill=GREEN)
+    out = _box(d, 700, 1570, 500, 100, "Validated .ls + reg/IO table",
+               "robot-ready - load and run, no integration", fill=GREEN)
     _arrow(d, aud, out)
 
     d.text((80, 1678),

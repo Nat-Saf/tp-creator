@@ -10,6 +10,11 @@ safety limits) checks every draft before anything is delivered. A mandatory
 audit adds human-review advisories, and every model call is traced in the
 `steps` array you can inspect in the GUI.
 
+The output is a **robot-ready pair**: the `.ls` program and its matching
+registers/IO table (`.csv`) - both saveable from the GUI. Load them onto
+an actual FANUC robot, teach the positions the report marks as untaught,
+and run: no integration layer, no glue code, no manual transcription.
+
 ![Agent architecture](docs/architecture.png)
 
 The main idea: **one deterministic machine, two narrow AI roles**. LLM #1
