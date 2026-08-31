@@ -1,0 +1,1 @@
+pick from the conveyor, verify the gripper closed feedback after closing the gripper, then place on fixture A

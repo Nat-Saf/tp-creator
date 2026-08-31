@@ -1,0 +1,1 @@
+move from home through conveyor approach to fixture A approach without stopping at the middle point, then back home

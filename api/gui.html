@@ -164,6 +164,7 @@
   <button class="api" data-ep="/api/agent_info" title="GET /api/agent_info">Agent info</button>
   <button class="api" data-ep="/api/model_architecture" data-kind="png" title="GET /api/model_architecture">Architecture</button>
   <button class="api" id="rawexec" title="Raw JSON of the last POST /api/execute call (debugging)">Raw execute</button>
+  <button class="api" id="infobtn" title="How this page works">Info</button>
 </div>
 
 <main class="wrap">
@@ -182,6 +183,10 @@
        PR[2]&rdquo; or &ldquo;add description to PR[10]&rdquo;. Edits
        live in this conversation only; the loaded file and the built-in
        default are never modified, and New task reverts them.</p>
+    <p>&ldquo;Config&rdquo; opens the program defaults in a side panel
+       (speeds, approach motion, gripper settle time) &mdash; values you
+       set there apply to every program in this conversation. Safety
+       limits stay fixed per cell and are shown read-only.</p>
     <p>Every delivered program comes with a Save (.ls) button, a folded
        report with safety advisories, and the full steps trace. The
        buttons at the top show the live API endpoint responses.</p>
@@ -439,6 +444,7 @@ async function run() {
       const tmark = "\n--- table ---\n";
       const tcut = shown.lastIndexOf(tmark);
       if (tcut >= 0) {
+        pushTableHistory();
         tableCsv = shown.slice(tcut + tmark.length);
         markTableEdited();
         shown = shown.slice(0, tcut);
@@ -517,6 +523,7 @@ tableFile.addEventListener("change", function () {
   }
   const reader = new FileReader();
   reader.onload = function () {
+    pushTableHistory();
     tableCsv = uploadedCsv = String(reader.result);
     tableCsvName = uploadedName = f.name;
     tableEdited = false;
@@ -526,6 +533,7 @@ tableFile.addEventListener("change", function () {
   reader.readAsText(f);
 });
 document.getElementById("cleartable").addEventListener("click", function () {
+  pushTableHistory();
   tableCsv = null;
   tableCsvName = null;
   uploadedCsv = null;
@@ -539,14 +547,34 @@ const tablePanelBody = document.getElementById("tablepanelbody");
 let tablePanelOpen = false;
 let panelMeta = null;    // '#' meta lines of the csv shown in the panel
 
-function markTableEdited() {
-  tableEdited = true;
-  if (!tableCsvName) tableCsvName = "edited_table.csv";
-  document.getElementById("tablename").textContent = uploadedName
-    ? "table: " + uploadedName + " (edited)"
-    : "table: edited in conversation";
+let tableHistory = [];       // previous table states, for Undo
+
+function pushTableHistory() {
+  tableHistory.push({ csv: tableCsv, name: tableCsvName });
+  if (tableHistory.length > 20) tableHistory.shift();
+}
+
+function refreshChip() {
+  const nameEl = document.getElementById("tablename");
+  if (!tableCsv) {
+    tableEdited = false;
+    tableChip.style.display = "none";
+    return;
+  }
+  if (uploadedCsv && tableCsv === uploadedCsv) {
+    tableEdited = false;
+    nameEl.textContent = "table: " + uploadedName;
+  } else {
+    tableEdited = true;
+    if (!tableCsvName) tableCsvName = "edited_table.csv";
+    nameEl.textContent = uploadedName
+      ? "table: " + uploadedName + " (edited)"
+      : "table: edited in conversation";
+  }
   tableChip.style.display = "inline-block";
 }
+
+function markTableEdited() { refreshChip(); }
 
 function csvField(s) {
   s = (s || "").replace(/ /g, " ").replace(/\s+/g, " ").trim();
@@ -556,6 +584,7 @@ function csvField(s) {
 function applyTableEdits() {
   const t = tablePanelBody.querySelector(".regtable table");
   if (!t) return;
+  pushTableHistory();
   const lines = ["type,index,comment,initialized,value"];
   [].slice.call(t.rows, 1).forEach(function (tr) {
     const c = [].slice.call(tr.cells, 0, 5).map(function (td) {
@@ -620,8 +649,30 @@ async function renderTablePanel() {
     save.addEventListener("click", function () {
       saveFile(tableCsv || csv, name || "table.csv", "text/csv");
     });
+    const undo = el("button", "save", "Undo");
+    undo.title = "Take back the last table change";
+    undo.addEventListener("click", function () {
+      if (!tableHistory.length) return;
+      const prev = tableHistory.pop();
+      tableCsv = prev.csv;
+      tableCsvName = prev.name;
+      refreshChip();
+      renderTablePanel();
+    });
+    const reset = el("button", "save",
+                     uploadedCsv ? "Reset to loaded file"
+                                 : "Reset to default");
+    reset.addEventListener("click", function () {
+      pushTableHistory();
+      tableCsv = uploadedCsv;
+      tableCsvName = uploadedName;
+      refreshChip();
+      renderTablePanel();
+    });
     tablePanelBody.appendChild(apply);
     tablePanelBody.appendChild(addRow);
+    tablePanelBody.appendChild(undo);
+    tablePanelBody.appendChild(reset);
     tablePanelBody.appendChild(save);
     tablePanelBody.appendChild(regTableFromCsv(csv, true));
   } catch (err) {
@@ -651,6 +702,15 @@ function closeConfigPanel() {
   document.getElementById("showconfig").classList.remove("active");
 }
 
+const CFG_LABELS = { term: "Approach Motion" };
+let configHistory = [];      // previous override sets, for Undo
+
+function _cfgCount() {
+  const n = Object.keys(configOverrides).length;
+  document.getElementById("showconfig").textContent =
+    n ? "Config (" + n + ")" : "Config";
+}
+
 async function renderConfigPanel() {
   configPanelBody.textContent = "";
   try {
@@ -663,7 +723,8 @@ async function renderConfigPanel() {
     data.overridable.forEach(function (key) {
       const row = el("div", "cfgrow");
       row.appendChild(el("label", "",
-                         key + "  (default: " + data.defaults[key] + ")"));
+        (CFG_LABELS[key] || key) + "  (default: "
+        + data.defaults[key] + ")"));
       const inp = document.createElement("input");
       inp.placeholder = String(data.defaults[key]);
       if (key in configOverrides) inp.value = configOverrides[key];
@@ -673,30 +734,46 @@ async function renderConfigPanel() {
     });
     const apply = el("button", "save", "Apply");
     apply.addEventListener("click", function () {
+      configHistory.push(Object.assign({}, configOverrides));
+      if (configHistory.length > 20) configHistory.shift();
       configOverrides = {};
       Object.keys(inputs).forEach(function (key) {
         const v = inputs[key].value.trim();
         if (!v) return;
         configOverrides[key] = v;   // units ride along ("150mm/sec")
       });
-      const n = Object.keys(configOverrides).length;
-      document.getElementById("showconfig").textContent =
-        n ? "Config (" + n + ")" : "Config";
+      _cfgCount();
       closeConfigPanel();
     });
-    const clear = el("button", "save", "Clear overrides");
-    clear.addEventListener("click", function () {
+    const undo = el("button", "save", "Undo");
+    undo.addEventListener("click", function () {
+      if (!configHistory.length) return;
+      configOverrides = configHistory.pop();
+      _cfgCount();
+      renderConfigPanel();
+    });
+    const reset = el("button", "save", "Reset to defaults");
+    reset.addEventListener("click", function () {
+      configHistory.push(Object.assign({}, configOverrides));
       configOverrides = {};
-      document.getElementById("showconfig").textContent = "Config";
+      _cfgCount();
       renderConfigPanel();
     });
     configPanelBody.appendChild(apply);
-    configPanelBody.appendChild(clear);
+    configPanelBody.appendChild(undo);
+    configPanelBody.appendChild(reset);
     configPanelBody.appendChild(el("div", "cfglimits",
-      "Safety limits (fixed per cell, changed only in the cell's config "
-      + "file): " + Object.keys(data.limits).map(function (k) {
-        return k + " = " + data.limits[k];
-      }).join(", ")));
+      "Safety limits - fixed per cell, changed only in the cell's "
+      + "config file:"));
+    Object.keys(data.limits).forEach(function (k) {
+      const row = el("div", "cfgrow");
+      row.appendChild(el("label", "", k + "  (fixed)"));
+      const inp = document.createElement("input");
+      inp.value = String(data.limits[k]);
+      inp.disabled = true;
+      row.appendChild(inp);
+      configPanelBody.appendChild(row);
+    });
   } catch (err) {
     configPanelBody.appendChild(el("div", "msg",
       "The config could not be loaded."));
@@ -713,6 +790,37 @@ document.getElementById("showconfig").addEventListener("click", function () {
 });
 document.getElementById("closeconfig").addEventListener("click",
                                                         closeConfigPanel);
+
+document.getElementById("infobtn").addEventListener("click", function () {
+  toggleApiCard("infobtn", "How this page works", function (c) {
+    [
+      "Type what the program should do and press Run (or Enter). If "
+      + "something is missing I ask - answer in the same box; the whole "
+      + "conversation stays my context. New task starts fresh.",
+      "Show table opens the registers/IO table in a side panel: view it, "
+      + "edit cells directly, add or remove rows, Undo, Reset, or save "
+      + "it as CSV. You can also load your own CSV, or edit in chat "
+      + "('add PR[2] as pick point') - edits live in this conversation "
+      + "only; the file and the built-in default are never modified.",
+      "Config opens the program defaults (speeds, approach motion, "
+      + "settle time) - values you set apply to every run in this "
+      + "conversation; safety limits are fixed per cell.",
+      "Every delivered program has a Save program (.ls) button, a "
+      + "folded Report & advisories section, and the Steps trace with "
+      + "every model call. Ask follow-up edits in plain words - "
+      + "'change line 13 to move to PR[10]'.",
+      "The result is robot-ready: load the .ls and the table CSV on the "
+      + "robot, teach the positions the report marks as untaught, and "
+      + "run - no integration work.",
+      "The endpoint buttons at the top show the live responses of the "
+      + "course API (team info, agent info, architecture, raw execute).",
+    ].forEach(function (s) {
+      const d = el("div", "msg", s);
+      d.style.marginBottom = "10px";
+      c.appendChild(d);
+    });
+  });
+});
 
 let apiCard = null;      // one endpoint response shown at a time
 let apiCardKey = null;   // which button opened it - 2nd push closes it

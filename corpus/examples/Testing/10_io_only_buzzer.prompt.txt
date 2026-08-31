@@ -1,0 +1,1 @@
+write a program that turns the buzzer on for 2 seconds and then off, with no motion at all

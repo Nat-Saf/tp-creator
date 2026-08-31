@@ -1,0 +1,1 @@
+move from home to fixture A approach, then move down by 50mm using PR[10] as a scratch register, and return home

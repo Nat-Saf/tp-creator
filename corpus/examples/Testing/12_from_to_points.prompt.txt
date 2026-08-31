@@ -1,0 +1,1 @@
+move the robot from the safe travel point to the purge station and then home

@@ -1,0 +1,1 @@
+if the part present input is on, pick from the conveyor and place on fixture A; otherwise just go back to home

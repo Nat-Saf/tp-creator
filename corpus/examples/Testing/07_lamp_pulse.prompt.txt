@@ -1,0 +1,1 @@
+pick from the conveyor to fixture A and pulse the green lamp for 1 second at the end

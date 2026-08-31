@@ -1,0 +1,1 @@
+move from home to the camera inspection pose, turn the camera on, wait for a minute, turn the camera off, and return home

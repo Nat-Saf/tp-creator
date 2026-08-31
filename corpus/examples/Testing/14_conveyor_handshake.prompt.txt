@@ -1,0 +1,1 @@
+move from home to conveyor approach, start the conveyor, wait until conveyor running is on with a 10 second timeout to an error label, then stop the conveyor and go home

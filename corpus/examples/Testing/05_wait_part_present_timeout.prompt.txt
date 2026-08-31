@@ -1,0 +1,1 @@
+pick from the conveyor and place on fixture A, but before picking wait until part present is on with a 5 second timeout to an error label

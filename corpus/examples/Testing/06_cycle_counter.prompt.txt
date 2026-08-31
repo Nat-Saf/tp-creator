@@ -1,0 +1,1 @@
+pick and place from the conveyor to fixture A and increment the cycle count at the end
