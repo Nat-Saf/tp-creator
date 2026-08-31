@@ -132,6 +132,25 @@ class TestApplyEdits:
         assert t2.find("PR", 5).initialized is True   # taught state kept
         assert t.find("PR", 5).comment == "conveyor pick"   # input intact
 
+    def test_new_entry_joins_its_type_group(self):
+        t, _ = materialize("line3_fanuc1", CSV)
+        t2, added, _, _ = table.apply_edits(t, [
+            {"type": "PR", "index": 2, "comment": "position 2"},
+            {"type": "ZZ_NEW", "index": 1}])   # unknown type -> refused
+        types = [e.type for e in t2.entries]
+        last_pr = max(i for i, x in enumerate(types) if x == "PR")
+        assert t2.entries[last_pr].index == 2       # right after the PRs
+        assert types[last_pr - 1] == "PR"
+        assert t2.entries[-1] == t.entries[-1]      # table end untouched
+        # two adds of the same type stay adjacent inside the group
+        t3, _, _, _ = table.apply_edits(t, [
+            {"type": "DO", "index": 101, "comment": "a"},
+            {"type": "DO", "index": 102, "comment": "b"}])
+        types3 = [e.type for e in t3.entries]
+        dos = [i for i, x in enumerate(types3) if x == "DO"]
+        assert dos == list(range(dos[0], dos[0] + len(dos)))  # contiguous
+        assert [t3.entries[i].index for i in dos[-2:]] == [101, 102]
+
     def test_identical_update_is_a_noop(self):
         t, _ = materialize("line3_fanuc1", CSV)
         t2, added, updated, _ = table.apply_edits(

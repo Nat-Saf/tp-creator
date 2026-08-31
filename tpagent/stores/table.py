@@ -97,7 +97,11 @@ def apply_edits(table: RegIOTable, edits: list) \
     Returns (table', added, updated, refusal notes). The input table is
     never mutated - the default table is a shared cached object."""
     entries = list(table.entries)
-    where = {(e.type, e.index): i for i, e in enumerate(entries)}
+
+    def _find(t: str, idx: int) -> int | None:
+        return next((i for i, x in enumerate(entries)
+                     if x.type == t and x.index == idx), None)
+
     added: list[Entry] = []
     updated: list[Entry] = []
     refused: list[str] = []
@@ -125,9 +129,9 @@ def apply_edits(table: RegIOTable, edits: list) \
             continue
         comment = raw.get("comment")
         value = raw.get("value")
-        key = (t, idx)
-        if key in where:                    # update note/value, keep the rest
-            old = entries[where[key]]
+        at = _find(t, idx)
+        if at is not None:                  # update note/value, keep the rest
+            old = entries[at]
             new = Entry(
                 type=old.type, index=old.index,
                 comment=(str(comment).strip() if comment is not None
@@ -137,15 +141,21 @@ def apply_edits(table: RegIOTable, edits: list) \
                        else old.value),
                 category=old.category, direction=old.direction)
             if new != old:
-                entries[where[key]] = new
+                entries[at] = new
                 updated.append(new)
         else:
             e = Entry(type=t, index=idx,
                       comment=str(comment or "").strip(),
                       initialized=init, value=str(value or "").strip(),
                       category=cat, direction=direction)
-            entries.append(e)
-            where[key] = len(entries) - 1
+            # keep type groups together: insert after the last row of
+            # the same type (a brand-new type goes to the bottom)
+            last = max((i for i, x in enumerate(entries) if x.type == t),
+                       default=None)
+            if last is None:
+                entries.append(e)
+            else:
+                entries.insert(last + 1, e)
             added.append(e)
     if not added and not updated:
         return table, [], [], refused
