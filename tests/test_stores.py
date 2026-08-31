@@ -151,6 +151,19 @@ class TestApplyEdits:
         assert dos == list(range(dos[0], dos[0] + len(dos)))  # contiguous
         assert [t3.entries[i].index for i in dos[-2:]] == [101, 102]
 
+    def test_writer_heals_stray_rows_into_their_group(self):
+        # a table whose PR landed at the bottom in an older conversation:
+        # every to_csv write regroups it with the PRs
+        stray = ("type,index,comment\n"
+                 "PR,1,home\n"
+                 "DO,7,lamp\n"
+                 "DI,3,part present\n"
+                 "PR,12,middle point\n")
+        t, _ = materialize("c1", stray)
+        lines = [l.split(",")[0] for l in
+                 table.to_csv(t).splitlines()[4:]]     # skip meta + header
+        assert lines == ["PR", "PR", "DO", "DI"]
+
     def test_identical_update_is_a_noop(self):
         t, _ = materialize("line3_fanuc1", CSV)
         t2, added, updated, _ = table.apply_edits(

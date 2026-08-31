@@ -248,6 +248,23 @@ class TestExistence:
         assert verdict.errors == []
 
 
+class TestSeededDestination:
+    def test_seeding_an_untaught_destination_blocks(self, table):
+        v = run(make_prog("PR[10]=PR[1]",
+                          "J PR[1:home] 100% FINE",
+                          "L PR[10] 100mm/sec FINE"), table, LIMITS)
+        assert v.verdict == "fail"
+        assert any("untaught and used as a move target" in (e.message or "")
+                   for e in v.errors)
+
+    def test_scratch_idiom_with_element_offset_passes(self, table):
+        v = run(make_prog("PR[10]=PR[6]",
+                          "PR[10,3]=PR[10,3]-100",
+                          "L PR[10] 50mm/sec FINE"), table, LIMITS)
+        assert not [e for e in v.errors if e.layer == "existence"]
+        assert any("not yet taught" in w for w in v.warnings)
+
+
 class TestLimits:
     def test_speed_over_limit(self, table):
         verdict = run(make_prog("L PR[5] 400mm/sec FINE"), table, LIMITS)

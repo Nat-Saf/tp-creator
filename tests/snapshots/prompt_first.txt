@@ -45,6 +45,10 @@ Hard rules:
   that would land 100mm above the start. NEVER write to a register the
   TASK names as a destination - "move to PR[10]" means PR[10] is
   read-only.
+- An untaught destination STAYS untaught: never seed it with another
+  pose (no PR[12]=PR[1] to "initialize" it) - the operator will teach
+  it on the pendant; just move to it. Seeding a register is allowed
+  ONLY for the relative-move scratch idiom above.
 - Apply EVERY numeric the TASK section states (distances, speeds, waits) -
   do not substitute a taught position for a stated relative distance.
 - Output the COMPLETE program through /END - never stop early.

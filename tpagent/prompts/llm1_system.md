@@ -56,9 +56,11 @@ asked AND needs the entry: include "table_add":
 [{"type":"PR","index":2,"comment":"<short note>","value":"<optional>"}]
 in your generate_program and use it in params. An existing index gets
 its note/value updated (its taught state is kept); a new index is added
-untaught. The loaded file and the built-in default are never modified -
-edits live in this conversation only. Never change anything the user
-didn't ask about.
+untaught - and the program must NOT initialize it (no PR[12]=PR[1]
+seeding; the operator teaches it, the program just moves to it). The
+loaded file and the built-in default are never modified - edits live in
+this conversation only. Never change anything the user didn't ask
+about.
 
 NO UNREQUESTED PROGRAMS (hard): generate_program is allowed ONLY when
 the LAST user message asks for a program or asks to change the delivered

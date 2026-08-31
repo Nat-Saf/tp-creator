@@ -53,11 +53,21 @@ class SchemaError(ValueError):
 def to_reg_io_csv(table: RegIOTable) -> str:
     """Serialize a table back to reg_io_v1 text (round-trips with the
     parser). Used when a conversation edit produces an updated table the
-    caller should carry forward."""
+    caller should carry forward.
+
+    Rows are written with type groups kept together (groups in order of
+    first appearance, rows inside a group in their original order), so a
+    stray entry from an older edit heals into its group on every write."""
+    order: dict[str, int] = {}
+    for e in table.entries:
+        order.setdefault(e.type, len(order))
+    grouped = sorted(range(len(table.entries)),
+                     key=lambda i: (order[table.entries[i].type], i))
     out = io.StringIO()
     w = csv.writer(out, lineterminator="\n")
     w.writerow(["type", "index", "comment", "initialized", "value"])
-    for e in table.entries:
+    for i in grouped:
+        e = table.entries[i]
         init = ("" if e.initialized is None
                 else "TRUE" if e.initialized else "FALSE")
         w.writerow([e.type, e.index, e.comment, init, e.value])

@@ -10,6 +10,10 @@ Owner decisions (2026-08-29, supersede DESIGN.md 4.9 on these points):
   program before teaching the pose is the real workshop workflow. The
   warning (with a did-you-mean when the inline label matches a taught
   entry's note) reaches the human as a report advisory instead.
+- (2026-08-31) SEEDING an untaught destination blocks: copying another
+  PR into an untaught PR and then moving to it (with no element
+  arithmetic in between - that pattern is the sanctioned relative-move
+  scratch idiom) defeats teaching; the pose must come from the pendant.
 """
 from __future__ import annotations
 
@@ -26,6 +30,16 @@ _REF = re.compile(
 def _known(table, type_: str) -> dict:
     return {str(e.index): e.comment for e in table.entries
             if e.type == type_ and e.initialized is not False}
+
+
+def _seeded_destination(body: str, idx: int) -> bool:
+    """PR[idx]=PR[j] + a move to PR[idx] + NO PR[idx,e]=... element line
+    == seeding an untaught destination (the element line is what makes
+    the legitimate relative-move scratch idiom)."""
+    return (re.search(rf"PR\[{idx}(?::[^\]]*)?\]\s*=\s*PR\[", body)
+            is not None
+            and re.search(rf"\b[JL]\s+PR\[{idx}[,:\]]", body) is not None
+            and re.search(rf"PR\[{idx}\s*,\s*\d", body) is None)
 
 
 def check(text: str, table) -> tuple[list[Err], list[str]]:
@@ -48,6 +62,8 @@ def check(text: str, table) -> tuple[list[Err], list[str]]:
                 # keep the first line but adopt a later occurrence's label
                 first_seen[key] = (first_seen[key][0], label)
 
+    body = "\n".join(c for _, c in mn_body(text)
+                     if not c.startswith("!"))
     errors: list[Err] = []
     warnings: list[str] = []
     for (type_, idx), (line_no, label) in sorted(first_seen.items(),
@@ -61,6 +77,15 @@ def check(text: str, table) -> tuple[list[Err], list[str]]:
                         f"(scan {table.scanned_at or 'unknown'}).",
                 known=_known(table, type_)))
         elif entry.initialized is False:
+            if type_ == "PR" and _seeded_destination(body, idx):
+                errors.append(Err(
+                    layer="existence", line=line_no, ref=ref,
+                    message=f"{ref} is untaught and used as a move target, "
+                            f"but the program copies another position into "
+                            f"it first - remove that line; the operator "
+                            f"teaches {ref} on the pendant, the program "
+                            f"just moves to it."))
+                continue
             hit = (next((e for e in table.by_note(label, type_)), None)
                    if label else None)
             if hit:
