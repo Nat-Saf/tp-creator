@@ -131,6 +131,12 @@
                 color: var(--text); padding: 4px 12px; font-weight: 700; }
   .regtable td[contenteditable] { outline: none; }
   .regtable td[contenteditable]:focus { background: var(--accent-soft); }
+  .regtable td.cellinp { padding: 2px 4px; }
+  .regtable td select, .regtable td input { font: inherit;
+      font-size: .84rem; background: var(--bg); color: var(--text);
+      border: 1px solid var(--field-border); border-radius: 4px;
+      padding: 2px 4px; width: 100%; min-width: 52px; }
+  .regtable td input { max-width: 70px; }
   .rowdel { background: none; border: 0; color: #cf222e; padding: 0 6px;
             font-weight: 700; }
   .cfgrow { display: flex; align-items: center; gap: 10px;
@@ -310,13 +316,73 @@ function parseCsvLine(line) {
   return out;
 }
 
-function _editRow(tr) {
+const REG_TYPE_LIST = ["PR", "R", "SR", "PL"];
+const IO_TYPE_LIST = ["DI", "DO", "RI", "RO", "UI", "UO", "SI", "SO",
+                      "GI", "GO", "AI", "AO"];
+
+function _typeSelect(value) {
+  const sel = document.createElement("select");
+  REG_TYPE_LIST.concat(IO_TYPE_LIST).forEach(function (t) {
+    sel.appendChild(new Option(t, t));
+  });
+  if (value && ![].some.call(sel.options,
+                             function (o) { return o.value === value; })) {
+    sel.appendChild(new Option(value, value));
+  }
+  sel.value = value || "PR";
+  return sel;
+}
+
+function _initSelect(value) {
+  const sel = document.createElement("select");
+  ["TRUE", "FALSE", "-"].forEach(function (v) {
+    sel.appendChild(new Option(v, v));
+  });
+  const v = (value || "").trim().toUpperCase();
+  sel.value = (v === "TRUE" || v === "FALSE") ? v : "-";
+  return sel;
+}
+
+function _indexInput(value) {
+  const inp = document.createElement("input");
+  inp.inputMode = "numeric";
+  inp.value = String(value || "").replace(/\D/g, "");
+  inp.addEventListener("input", function () {   // integers only
+    inp.value = inp.value.replace(/\D/g, "");
+  });
+  return inp;
+}
+
+function _dataRow(cells) {
+  const tr = document.createElement("tr");
+  const typeSel = _typeSelect((cells[0] || "").trim().toUpperCase());
+  const initSel = _initSelect(cells[3]);
+  // an IO type has no taught state; a register is TRUE/FALSE
+  typeSel.addEventListener("change", function () {
+    if (IO_TYPE_LIST.indexOf(typeSel.value) >= 0) initSel.value = "-";
+    else if (initSel.value === "-") initSel.value = "TRUE";
+  });
+  [typeSel, _indexInput(cells[1]), null, initSel, null]
+    .forEach(function (widget, col) {
+      const td = el("td", widget ? "cellinp" : "");
+      if (widget) {
+        td.appendChild(widget);
+      } else {
+        td.textContent = cells[col] || "";
+        td.contentEditable = "true";
+      }
+      tr.appendChild(td);
+    });
   const td = el("td", "");
   const del = el("button", "rowdel", "×");
   del.title = "Remove this row";
   del.addEventListener("click", function () { tr.remove(); });
   td.appendChild(del);
   tr.appendChild(td);
+  if (IO_TYPE_LIST.indexOf(typeSel.value) < 0 && initSel.value === "-") {
+    initSel.value = "TRUE";       // a register always has a taught state
+  }
+  return tr;
 }
 
 function regTableFromCsv(csv, editable) {
@@ -325,25 +391,23 @@ function regTableFromCsv(csv, editable) {
     .map(parseCsvLine);
   const t = document.createElement("table");
   rows.forEach(function (cells, i) {
-    const tr = document.createElement("tr");
-    const source = (editable && i === 0)
-      ? ["type", "index", "comment", "initialized", "value"]
-      : cells.slice(0, 5);
-    source.forEach(function (v) {
-      const cell = el(i === 0 ? "th" : "td", "", v);
-      if (editable && i > 0) cell.contentEditable = "true";
-      tr.appendChild(cell);
-    });
-    while (editable && tr.children.length < 5) {
-      const cell = el(i === 0 ? "th" : "td", "", "");
-      if (i > 0) cell.contentEditable = "true";
-      tr.appendChild(cell);
+    if (i === 0) {
+      const tr = document.createElement("tr");
+      (editable ? ["type", "index", "comment", "initialized", "value", ""]
+                : cells.slice(0, 5))
+        .forEach(function (v) { tr.appendChild(el("th", "", v)); });
+      t.appendChild(tr);
+      return;
     }
     if (editable) {
-      if (i === 0) tr.appendChild(el("th", "", ""));
-      else _editRow(tr);
+      t.appendChild(_dataRow(cells));
+    } else {
+      const tr = document.createElement("tr");
+      cells.slice(0, 5).forEach(function (v) {
+        tr.appendChild(el("td", "", v));
+      });
+      t.appendChild(tr);
     }
-    t.appendChild(tr);
   });
   const box = el("div", "regtable");
   box.appendChild(t);
@@ -588,7 +652,8 @@ function applyTableEdits() {
   const lines = ["type,index,comment,initialized,value"];
   [].slice.call(t.rows, 1).forEach(function (tr) {
     const c = [].slice.call(tr.cells, 0, 5).map(function (td) {
-      return td.textContent;
+      const widget = td.querySelector("select,input");
+      return widget ? widget.value : td.textContent;
     });
     if (!c[0].trim() || !c[1].trim()) return;   // a row needs type+index
     lines.push(c.map(csvField).join(","));
@@ -635,15 +700,7 @@ async function renderTablePanel() {
     const addRow = el("button", "save", "+ Add row");
     addRow.addEventListener("click", function () {
       const t = tablePanelBody.querySelector(".regtable table");
-      if (!t) return;
-      const tr = document.createElement("tr");
-      for (let k = 0; k < 5; k++) {
-        const td = el("td", "", "");
-        td.contentEditable = "true";
-        tr.appendChild(td);
-      }
-      _editRow(tr);
-      t.appendChild(tr);
+      if (t) t.appendChild(_dataRow(["", "", "", "", ""]));
     });
     const save = el("button", "save", "Save table (.csv)");
     save.addEventListener("click", function () {
