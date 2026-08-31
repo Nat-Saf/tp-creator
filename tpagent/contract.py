@@ -25,6 +25,7 @@ class Request:
     example_ls: Optional[str] = None
     revision_of: Optional[str] = None    # previous draft_id
     answers: dict = field(default_factory=dict)  # {"reply": "<raw text>"} or {key: value}
+    previous_ls: Optional[str] = None    # last delivered program (edit turns)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -55,6 +56,7 @@ class Response:
     report: Optional[Report] = None
     questions: list = field(default_factory=list)   # plain, friendly, self-contained
     reason: Optional[str] = None                    # rejected/failed: friendly one-liner
+    table_csv: Optional[str] = None    # updated conversation table (edits/additions)
 
     def to_json(self) -> str:
         d = asdict(self)

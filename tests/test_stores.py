@@ -139,6 +139,18 @@ class TestAdditions:
         assert t2.find("DO", 9).direction == "out"
         assert len(refused) == 2
 
+    def test_value_recorded_and_round_trips(self):
+        t, _ = materialize("line3_fanuc1", CSV)
+        t2, added, _ = table.with_additions(t, [
+            {"type": "DO", "index": 100, "comment": "dispenser on",
+             "value": "OFF"}])
+        assert t2.find("DO", 100).value == "OFF"
+        back = table.parse_scan(table.to_csv(t2))     # writer round-trips
+        assert back.find("DO", 100).comment == "dispenser on"
+        assert back.find("DO", 100).value == "OFF"
+        assert len(back.entries) == len(t2.entries)
+        assert back.cell_id == t2.cell_id
+
     def test_duplicate_within_request_added_once(self):
         t, _ = materialize("line3_fanuc1", CSV)
         t2, added, refused = table.with_additions(t, [

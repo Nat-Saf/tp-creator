@@ -184,9 +184,13 @@ const runBtn = document.getElementById("run");
 const hint = document.getElementById("hint");
 let turns = [];          // committed transcript: {role, text}
 let busy = false;
-let tableCsv = null;     // loaded registers/IO table, resent every call
+let tableCsv = null;     // active registers/IO table, resent every call
 let tableCsvName = null; // its file name (for save-as-csv)
+let uploadedCsv = null;  // the file as loaded (conversation edits revert
+let uploadedName = null; //  to this on New task)
+let tableEdited = false;
 let lastExecute = null;  // raw JSON of the last /api/execute reply
+let lastProgram = null;  // last delivered program (sent for edit turns)
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -332,6 +336,7 @@ async function run() {
   try {
     const payload = { prompt: transcriptWith(text) };
     if (tableCsv) payload.scan = tableCsv;
+    if (lastProgram) payload.previous_ls = lastProgram;
     const r = await fetch("/api/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -341,9 +346,35 @@ async function run() {
     lastExecute = data;
     status.remove();
     if (data.status === "ok" && data.response !== null) {
+      let shown = data.response;
+      // an updated conversation table rides in as a trailer: adopt it
+      const tmark = "\n--- table ---\n";
+      const tcut = shown.lastIndexOf(tmark);
+      if (tcut >= 0) {
+        tableCsv = shown.slice(tcut + tmark.length);
+        if (!tableCsvName) tableCsvName = "edited_table.csv";
+        tableEdited = true;
+        document.getElementById("tablename").textContent = uploadedName
+          ? "table: " + uploadedName + " (edited)"
+          : "table: edited in conversation";
+        tableChip.style.display = "inline-block";
+        shown = shown.slice(0, tcut);
+        if (apiCardKey === "showtable") {   // an open table view is stale
+          apiCard.remove();
+          apiCard = null;
+          apiCardKey = null;
+          document.querySelectorAll("button.api.active").forEach(
+            function (b) { b.classList.remove("active"); });
+        }
+      }
+      // remember the delivered program so "edit it" turns can send it
+      const pcut = shown.indexOf("\n--- report ---\n");
+      if (pcut >= 0 && shown.trim().indexOf("/PROG") === 0) {
+        lastProgram = shown.slice(0, pcut).trim();
+      }
       turns.push({ role: "user", text: text });
-      turns.push({ role: "assistant", text: data.response });
-      showAssistant(data.response, data.steps || []);
+      turns.push({ role: "assistant", text: shown });
+      showAssistant(shown, data.steps || []);
     } else {
       showError(data.error || "The agent returned an unexpected reply.",
                 data.steps || []);
@@ -365,6 +396,7 @@ promptBox.addEventListener("keydown", function (e) {
 });
 document.getElementById("newtask").addEventListener("click", function () {
   turns = [];
+  lastProgram = null;
   apiCard = null;        // its node goes with the conversation
   apiCardKey = null;
   document.querySelectorAll("button.api.active").forEach(function (b) {
@@ -374,7 +406,19 @@ document.getElementById("newtask").addEventListener("click", function () {
   hint.style.display = "";
   promptBox.value = "";
   promptBox.focus();
-  // the loaded table is cell state, not conversation state - it stays
+  // an uploaded FILE is cell state and stays; edits made in the ended
+  // conversation revert to the file (or to no table at all)
+  if (tableEdited) {
+    tableCsv = uploadedCsv;
+    tableCsvName = uploadedName;
+    tableEdited = false;
+    if (tableCsv) {
+      document.getElementById("tablename").textContent =
+        "table: " + uploadedName;
+    } else {
+      tableChip.style.display = "none";
+    }
+  }
 });
 
 const tableFile = document.getElementById("tablefile");
@@ -396,8 +440,9 @@ tableFile.addEventListener("change", function () {
   }
   const reader = new FileReader();
   reader.onload = function () {
-    tableCsv = String(reader.result);
-    tableCsvName = f.name;
+    tableCsv = uploadedCsv = String(reader.result);
+    tableCsvName = uploadedName = f.name;
+    tableEdited = false;
     document.getElementById("tablename").textContent = "table: " + f.name;
     tableChip.style.display = "inline-block";
   };
@@ -406,6 +451,9 @@ tableFile.addEventListener("change", function () {
 document.getElementById("cleartable").addEventListener("click", function () {
   tableCsv = null;
   tableCsvName = null;
+  uploadedCsv = null;
+  uploadedName = null;
+  tableEdited = false;
   tableChip.style.display = "none";
   tableMsg.textContent = "";
 });
@@ -415,7 +463,7 @@ document.getElementById("showtable").addEventListener("click", function () {
     try {
       let csv = tableCsv, name = tableCsvName, note;
       if (csv) {
-        note = "Your uploaded table - it is sent with every run.";
+        note = "This conversation's table - it is sent with every run.";
       } else {
         const r = await fetch("/api/table");
         const data = await r.json();

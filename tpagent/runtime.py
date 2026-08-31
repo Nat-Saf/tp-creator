@@ -131,7 +131,8 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
 
     messages = llm1.initial_messages(
         req.prompt, table, source, cfg,
-        example_attached=bool(req.example_ls), answers=req.answers)
+        example_attached=bool(req.example_ls), answers=req.answers,
+        previous_attached=bool(req.previous_ls))
 
     chunks: list[str] = []
     retrieval_note: str | None = None
@@ -145,6 +146,8 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
     program = None
     draft_id = None
     pinned = None                 # first attempt's TASK+NOTES (DESIGN 5)
+    edit_prev = None              # edit turns: previous program to renderer
+    table_csv_out = None          # updated conversation table for the caller
     params: dict = {}
     program_name = "PROGRAM"
     inferred: list = []
@@ -174,6 +177,42 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 return Response(status="rejected",
                                 reason=action.get("reason") or _PROTOCOL_MSG)
 
+            if action["action"] == "edit_table":
+                # a table-only request: apply the additions (add-only,
+                # never overriding), hand the updated CSV back to the
+                # caller, and answer without generating any program
+                if source == "none":
+                    # a one-row table would silently flip the empty robot
+                    # into a whitelist that blocks everything else
+                    return Response(status="needs_clarification", questions=[
+                        "There's no registers and IO table loaded for this "
+                        "cell, so the robot is treated as empty and any "
+                        "index is already usable. To maintain a table, "
+                        "load your CSV with the button on the page first, "
+                        "then ask me again."])
+                new_table, added, refused = table_store.with_additions(
+                    table, action.get("add") or [])
+                lines = []
+                for e in added:
+                    note = f" '{e.comment}'" if e.comment else ""
+                    val = f" (value {e.value})" if e.value else ""
+                    lines.append(f"Done - {e.type}[{e.index}]{note}{val} is "
+                                 f"now in this conversation's table.")
+                    sess.log_decision(f"edit_table add {e.type}[{e.index}]")
+                lines.extend(refused)
+                if added:
+                    table_csv_out = table_store.to_csv(new_table)
+                    lines.append("Press 'Save table (.csv)' on the page to "
+                                 "keep it permanently. What program should "
+                                 "I write with it?")
+                if not lines:
+                    lines = ["I couldn't find anything to change in the "
+                             "table - can you name the entry to add, like "
+                             "'add DO[100] dispenser on'?"]
+                return Response(status="needs_clarification",
+                                questions=[" ".join(lines)],
+                                table_csv=table_csv_out)
+
             if action["action"] == "ask_user":
                 questions = [str(q) for q in action.get("questions") or []]
                 if not questions:
@@ -181,7 +220,8 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                                  "program should do?"]
                 sess.set_pending_question(questions[0])
                 return Response(status="needs_clarification",
-                                questions=questions)
+                                questions=questions,
+                                table_csv=table_csv_out)
 
             if action["action"] == "rag_retrieve":
                 got = 0
@@ -206,6 +246,10 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
             if pinned is None:                  # first attempt: fix the task
                 params = action.get("params") or {}
                 program_name = str(action.get("program_name") or "PROGRAM")
+                if action.get("edit_previous") and req.previous_ls:
+                    # edit turn: the delivered program goes to the renderer
+                    # FROM THE REQUEST - LLM #1 only describes the delta
+                    edit_prev = req.previous_ls
 
                 # user-requested table additions (owner decision): the
                 # runtime merges NEW entries into the working table -
@@ -217,6 +261,8 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                     table, added, refused = \
                         table_store.with_additions(table, adds)
                     check_table = table
+                    if added:
+                        table_csv_out = table_store.to_csv(table)
                     for e in added:
                         note = f" '{e.comment}'" if e.comment else ""
                         table_notes.append(
@@ -227,6 +273,17 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                             f"for future runs.")
                         sess.log_decision(f"table_add {e.type}[{e.index}]")
                     table_notes.extend(refused)
+                elif adds:
+                    # empty robot: any index is usable already - just
+                    # acknowledge, never emit a one-row "table"
+                    for a in adds:
+                        if isinstance(a, dict) and a.get("type") \
+                                and a.get("index") is not None:
+                            table_notes.append(
+                                f"Noted {a.get('type')}[{a.get('index')}] "
+                                f"- no table is loaded for this cell, so "
+                                f"any index is usable; teach it on the "
+                                f"pendant before running.")
 
                 if retrieve_fn is not None and not chunks:
                     # mandatory pre-generation retrieval (DESIGN flow step 4)
@@ -249,7 +306,8 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                 base_draft=base, errors=base_errors,
                 fix_guidance=action.get("fix_guidance"))
             rsess = renderer.RenderSession(example_ls=req.example_ls,
-                                           drafts=drafts)
+                                           drafts=drafts,
+                                           previous_ls=edit_prev)
             prompt_text = renderer.render(cfg, table, rsess, args)
 
             draft = llm2.generate(prompt_text, llm)
@@ -293,12 +351,65 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                                                    attempts, verdict))
 
         try:                                # audit ALWAYS; can never block
-            advisories = review.semantic_audit(
+            advisories, must_fix = review.semantic_audit(
                 program, params, table, llm,
                 effective_defaults=cfg.get("defaults", {}))
         except (LLMClientError, llm1.ProtocolError):
             advisories = ["The automatic review wasn't available this time "
                           "- please give the program a quick manual look."]
+            must_fix = None
+
+        # loop ownership: the auditor can retry, spending the same budget
+        # (ONE corrective regeneration; findings never withhold delivery)
+        if must_fix and attempts < max_attempts:
+            args = renderer.GenerateArgs(
+                **pinned, chunks=list(chunks), base_draft=draft_id,
+                errors=[], fix_guidance="Semantic review found a "
+                "contradiction with the task - fix ONLY this: " + must_fix)
+            rsess = renderer.RenderSession(example_ls=req.example_ls,
+                                           drafts=drafts,
+                                           previous_ls=edit_prev)
+            try:
+                fixed = llm2.generate(renderer.render(cfg, table, rsess,
+                                                      args), llm)
+                attempts += 1
+                v2 = validate(fixed.text, check_table, limits)
+                d2 = sess.save_draft(fixed.text)
+                drafts[d2] = fixed.text
+                sess.save_verdict(d2, v2.verdict,
+                                  errors=[e.to_dict() for e in v2.errors],
+                                  stats={**v2.stats,
+                                         "warnings": v2.warnings})
+                if v2.verdict == "pass":
+                    program, draft_id, verdict = fixed.text, d2, v2
+                    try:
+                        advisories, still_flagged = review.semantic_audit(
+                            program, params, table, llm,
+                            effective_defaults=cfg.get("defaults", {}))
+                    except (LLMClientError, llm1.ProtocolError):
+                        advisories, still_flagged = [], None
+                    advisories = ["The automatic review requested one "
+                                  "correction and it was applied - please "
+                                  "still give the program a look."] \
+                        + advisories
+                    if still_flagged:   # one regeneration only - surface it
+                        advisories = ["The review still flags: "
+                                      + still_flagged + " - please correct "
+                                      "this by hand."] + advisories
+                else:               # the fix broke validation: keep original
+                    advisories = ["The automatic review flagged: " + must_fix
+                                  + " - I couldn't apply the fix cleanly, "
+                                  "so please correct this by hand."] \
+                        + advisories
+            except (LLMClientError, llm1.ProtocolError):
+                advisories = ["The automatic review flagged: " + must_fix
+                              + " - please correct this by hand."] \
+                    + advisories
+        elif must_fix:          # budget already spent: the finding must
+            advisories = ["The automatic review flagged: " + must_fix
+                          + " - the drafting budget for this run was "
+                          "already used, so please correct this by "
+                          "hand."] + advisories       # still reach the human
 
     except llm1.ProtocolError:
         return Response(status="failed", reason=_PROTOCOL_MSG,
@@ -324,4 +435,5 @@ def handle(req: Request, *, recorder: StepsRecorder | None = None,
                                  asdict(report), client=sb_client)
     sess.log_decision(f"delivered {draft_id} after {attempts} attempt(s)")
     return Response(status="ok", draft_id=draft_id, program_ls=program,
-                    file_ref=file_ref, report=report)
+                    file_ref=file_ref, report=report,
+                    table_csv=table_csv_out)

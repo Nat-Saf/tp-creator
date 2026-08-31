@@ -44,6 +44,8 @@ class RenderSession:
     """The runtime-built view of session state the renderer may read."""
     example_ls: str | None = None
     drafts: dict = field(default_factory=dict)      # draft_id -> text
+    previous_ls: str | None = None    # edit turns: the delivered program
+                                      # (from the REQUEST, never from LLM #1)
 
 
 def _table_block(table) -> str:
@@ -75,6 +77,9 @@ def render(cfg: dict, table, sess: RenderSession, args: GenerateArgs) -> str:
     if sess.example_ls:
         sections.append(_ENV.get_template("example.j2").render(
             example_ls=sess.example_ls))
+    if sess.previous_ls:
+        sections.append(_ENV.get_template("edit.j2").render(
+            previous_ls=sess.previous_ls))
     sections.append(_ENV.get_template("task.j2").render(
         params=_kv_block(args.params)))
     sections.append(_ENV.get_template("notes.j2").render(

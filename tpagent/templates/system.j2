@@ -36,5 +36,16 @@ Hard rules:
 - Keep /ATTR to OWNER and COMMENT only. Never invent instructions (no
   TOOL[...], no $-variable SET lines).
 - Use FINE at contact points and on the final move; CNT for travel.
+- Relative moves ("down by 100mm") use a SCRATCH position register:
+    20:  PR[19]=PR[6] ;
+    21:  PR[19,3]=PR[19,3]-100 ;
+    22:  L PR[19] 50mm/sec FINE ;
+  (element 3 = Z). To move back up, offset the CURRENT scratch value
+  (PR[19,3]=PR[19,3]+100) - do NOT reset it from the reference first,
+  that would land 100mm above the start. NEVER write to a register the
+  TASK names as a destination - "move to PR[10]" means PR[10] is
+  read-only.
+- Apply EVERY numeric the TASK section states (distances, speeds, waits) -
+  do not substitute a taught position for a stated relative distance.
 - Output the COMPLETE program through /END - never stop early.
 Follow the CELL section exactly - its registers, limits and defaults are law.

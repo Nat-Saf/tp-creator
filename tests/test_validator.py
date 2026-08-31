@@ -46,6 +46,13 @@ class TestGrammar:
         assert verdict.stats["mn_lines"] == 15
         assert verdict.stats["parsed_ok"] == 15
 
+    def test_empty_bracket_label_rejected(self):
+        # PR[10,3:] slipped through a live run - a colon with no label
+        # is not pendant syntax
+        verdict = run(make_prog("PR[10,3:]=PR[10,3:]-100.0"), None, LIMITS)
+        assert verdict.verdict == "fail"
+        assert any("empty label" in (e.message or "") for e in verdict.errors)
+
     def test_more_good_forms(self):
         verdict = run(make_prog(
             "LBL[10]", "JMP LBL[99]", "CALL SET_STR('No PBS tray',10)",

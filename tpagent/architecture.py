@@ -101,7 +101,11 @@ FLOW = [
              "it maps them to real registers and IO through the pendant "
              "notes and applies the gap policy - use a default, infer with "
              "a note, or ask. An ambiguous or missing pick/place position "
-             "always comes back as a question."},
+             "always comes back as a question. On an explicit user request "
+             "it can also add NEW table entries (or answer a table-only "
+             "edit without generating a program) - existing rows are never "
+             "overridden, and the updated table travels back to the "
+             "caller."},
     {"step": 4, "title": "Retrieval",
      "modules": [modules.RUNTIME, modules.RAG_RETRIEVE, modules.RAG_EMBED],
      "text": "The Runtime always calls RAG-Retrieve for TP-syntax "
@@ -121,8 +125,10 @@ FLOW = [
              "cell, docs, task, notes, previous draft + fix on retries). "
              "It takes the table and config from the stores, never from "
              "LLM1-Intake's output - the tool call has no field that could "
-             "carry them (no-leakage). LLM2-Codegen writes the TP draft in "
-             "a fresh context."},
+             "carry them (no-leakage). On an edit turn the previously "
+             "delivered program is included so only the requested change "
+             "is applied. LLM2-Codegen writes the TP draft in a fresh "
+             "context."},
     {"step": 7, "title": "Validation", "modules": [modules.VALIDATOR],
      "text": "Every draft goes through the deterministic three-layer "
              "Validator: grammar token walks, existence against the table "
@@ -138,7 +144,9 @@ FLOW = [
     {"step": 9, "title": "Audit - always", "modules": [modules.LLM1_AUDIT],
      "text": "Every passing program is reviewed by LLM1-Audit for mapping "
              "and intent correctness, with the effective defaults in hand. "
-             "Advisory only - findings never block delivery."},
+             "A hard contradiction with the task triggers ONE corrective "
+             "regeneration within the same retry budget; the findings "
+             "themselves never block delivery."},
     {"step": 10, "title": "Store and respond",
      "modules": [modules.RUNTIME, modules.STORES],
      "text": "Outputs and the full report persist via Stores (Supabase); "

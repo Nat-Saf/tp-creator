@@ -24,7 +24,9 @@ from io import StringIO
 
 from tpagent.config import ROOT
 from tpagent.reg_io import (IO_DIR, REG_TYPES, Entry, RegIOTable,
-                            SchemaError, parse_reg_io_csv)
+                            SchemaError, parse_reg_io_csv, to_reg_io_csv)
+
+to_csv = to_reg_io_csv        # single-parser rule: re-exported, not re-imported
 
 DEFAULT_TABLE = ROOT / "config" / "default_table.csv"
 
@@ -127,7 +129,8 @@ def with_additions(table: RegIOTable, additions: list) \
         accepted.append(Entry(
             type=t, index=idx,
             comment=str(raw.get("comment") or "").strip(),
-            initialized=init, value="", category=cat, direction=direction))
+            initialized=init, value=str(raw.get("value") or "").strip(),
+            category=cat, direction=direction))
     if not accepted:
         return table, [], refused
     merged = RegIOTable(cell_id=table.cell_id, scanned_at=table.scanned_at,

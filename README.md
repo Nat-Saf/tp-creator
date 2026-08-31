@@ -38,8 +38,10 @@ numbered flow below.
 3. **Intake** - LLM1-Intake maps the user's words to real registers and
    IO through their pendant notes and applies the gap policy: use a
    default, infer with a note, or ask. On an explicit user request
-   ("add PR[2]") it may add a NEW entry to the working table - existing
-   rows are never overridden, and the new entry starts untaught.
+   ("add PR[2]", "add DO[100] 'dispenser on'") it adds NEW entries to the
+   conversation's table - or answers a table-only edit without generating
+   any program. Existing rows are never overridden, new registers start
+   untaught, and the updated table travels back to the page.
 4. **Retrieval** - the Runtime always fetches TP-syntax documentation
    before the first draft (RAG-Retrieve over the Pinecone index that
    RAG-Embed built offline from our own-words notes in
@@ -52,7 +54,9 @@ numbered flow below.
 6. **Prompt and draft** - the Renderer deterministically assembles the
    LLM2-Codegen prompt from fixed sections (canonical skeleton, cell,
    docs, task, notes, previous draft + fix). It takes the table and
-   config from the stores, never from LLM #1's output (no-leakage).
+   config from the stores, never from LLM #1's output (no-leakage). On an
+   **edit turn** ("change line 13...") the previously delivered program
+   is included verbatim and only the requested change is applied.
    LLM2-Codegen writes the TP draft in a fresh context.
 7. **Validation** - every draft passes the deterministic three-layer
    Validator: grammar token walks, existence against the table (skipped
@@ -65,7 +69,10 @@ numbered flow below.
    mechanically.
 9. **Audit - always** - every passing program is reviewed by LLM1-Audit
    for mapping and intent correctness, with the effective defaults in
-   hand. Advisory only - findings never block delivery.
+   hand. A hard contradiction with the task (a stated value not applied,
+   the wrong signal, an overwritten destination register) triggers ONE
+   corrective regeneration within the same retry budget; the findings
+   themselves never block delivery.
 10. **Store and respond** - outputs and the full report persist to
     Supabase; the adapter maps the result to the exact course shape
     `{status, error, response, steps}`, and the steps recorder
@@ -118,6 +125,14 @@ every model call with its module name, prompt and response. Enter runs
 the agent (Shift+Enter for a new line), and the buttons at the top of
 the page show the live responses of every API endpoint.
 
+Follow-ups understand **edits** ("change line 13 to move to PR[10]" -
+the previous program is edited minimally, not re-invented), **relative
+moves** ("move down by 100mm" - implemented with a scratch position
+register the agent asks you to choose), and **table edits** ("add
+DO[100] 'dispenser on'" - the entry joins the conversation's table,
+visible under Show table and saveable as CSV; New task reverts
+conversation edits to the loaded file).
+
 ## API
 
 | Endpoint | Purpose |
@@ -131,7 +146,10 @@ the page show the live responses of every API endpoint.
 | `GET /api/health` | `{"ok": true}` |
 
 Every GET endpoint also has a one-click button at the top of the GUI, so
-you can inspect its live response without leaving the page.
+you can inspect its live response without leaving the page. When a
+conversation edits the table, the `/api/execute` response text ends with
+a machine-readable `--- table ---` trailer carrying the updated CSV; the
+GUI peels it off and adopts it as the loaded table.
 
 ## Local development
 

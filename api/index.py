@@ -126,6 +126,7 @@ def agent_info() -> dict:
 class ExecuteBody(BaseModel):
     prompt: str
     scan: str | None = None     # optional registers/IO table CSV (GUI upload)
+    previous_ls: str | None = None   # last delivered program (edit turns)
 
 
 def _report_summary(report) -> str:
@@ -151,6 +152,7 @@ def execute(body: ExecuteBody) -> dict:
     config.load_dotenv()
     try:
         req = Request(prompt=body.prompt, scan=body.scan,
+                      previous_ls=body.previous_ls,
                       cell_id=os.environ.get("DEMO_CELL", "line3_fanuc1"))
         resp = runtime.handle(
             req, recorder=recorder,
@@ -158,15 +160,19 @@ def execute(body: ExecuteBody) -> dict:
                 q, profile, llm=LLMClient(recorder)))
 
         # the whole mapping stays inside the guard so the exact 4-key
-        # shape survives even malformed report content
+        # shape survives even malformed report content. An updated
+        # conversation table rides along as a "--- table ---" trailer the
+        # GUI peels off and adopts as its loaded table.
+        table_trailer = ("\n--- table ---\n" + resp.table_csv
+                         if resp.table_csv else "")
         if resp.status == "ok":
             return {"status": "ok", "error": None,
                     "response": resp.program_ls + "\n--- report ---\n"
-                    + _report_summary(resp.report),
+                    + _report_summary(resp.report) + table_trailer,
                     "steps": recorder.steps}
         if resp.status == "needs_clarification":
             return {"status": "ok", "error": None,
-                    "response": "\n".join(resp.questions),
+                    "response": "\n".join(resp.questions) + table_trailer,
                     "steps": recorder.steps}
         if resp.status == "rejected":
             return {"status": "ok", "error": None, "response": resp.reason,

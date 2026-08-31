@@ -16,7 +16,8 @@ from pathlib import Path
 from tpagent import modules
 from tpagent.llm_client import LLMClient
 
-ACTIONS = {"rag_retrieve", "generate_program", "ask_user", "reject"}
+ACTIONS = {"rag_retrieve", "generate_program", "ask_user", "reject",
+           "edit_table"}
 _SYSTEM = (Path(__file__).parent / "prompts" / "llm1_system.md")
 
 
@@ -37,13 +38,15 @@ def table_view(table) -> list[dict]:
 
 def initial_messages(prompt: str, table, source: str, cfg: dict,
                      example_attached: bool,
-                     answers: dict | None = None) -> list[dict]:
+                     answers: dict | None = None,
+                     previous_attached: bool = False) -> list[dict]:
     context = {
         "prompt": prompt,
         "table": {"source": source, "entries": table_view(table)},
         "effective_defaults": cfg.get("defaults", {}),
         "limits": cfg.get("limits", {}),
         "example_attached": example_attached,
+        "previous_program_attached": previous_attached,
     }
     if answers:
         context["answers"] = answers
@@ -68,6 +71,12 @@ def parse_action(text: str) -> dict:
 
 
 def parse_advisories(text: str) -> list[str]:
+    return parse_audit(text)[0]
+
+
+def parse_audit(text: str) -> tuple[list[str], str | None]:
+    """Audit reply -> (advisories, must_fix). must_fix is the one hard
+    contradiction the auditor wants corrected, or None."""
     text = text.strip()
     if text.startswith("```"):
         lines = text.splitlines()[1:]
@@ -78,7 +87,9 @@ def parse_advisories(text: str) -> list[str]:
     advisories = data.get("advisories") if isinstance(data, dict) else None
     if not isinstance(advisories, list):
         raise ValueError("no advisories list")
-    return [str(a) for a in advisories][:3]
+    must_fix = data.get("must_fix") if isinstance(data, dict) else None
+    must_fix = str(must_fix).strip() if must_fix else None
+    return [str(a) for a in advisories][:3], must_fix or None
 
 
 def decide(llm: LLMClient, messages: list[dict]) -> tuple[dict, str]:

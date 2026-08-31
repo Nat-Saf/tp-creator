@@ -20,12 +20,24 @@ effective defaults and any user-requested values actually land in the code
 cannot block delivery.
 
 Reply with ONE JSON object, nothing else:
-{"advisories": ["<plain, friendly, self-contained sentence>", ...]}
-Return an empty list when nothing is worth flagging. At most 3 advisories."""
+{"advisories": ["<plain, friendly, self-contained sentence>", ...],
+ "must_fix": null}
+Return an empty list when nothing is worth flagging. At most 3 advisories.
+Set "must_fix" to ONE short instruction ONLY for a hard contradiction
+between the task params and the code: a stated numeric or param that was
+not applied, the wrong signal used for an action, or a register the task
+names as a destination being overwritten. It triggers exactly one
+corrective regeneration; anything softer stays an advisory with
+must_fix null."""
 
 
 def semantic_audit(program: str, params: dict, table, llm: LLMClient,
-                   effective_defaults: dict | None = None) -> list[str]:
+                   effective_defaults: dict | None = None) \
+        -> tuple[list[str], str | None]:
+    """Returns (advisories, must_fix). must_fix is the auditor's single
+    sanctioned correction request (loop ownership: the auditor can retry,
+    spending the same budget) - the RUNTIME decides whether budget
+    remains; findings never withhold delivery."""
     payload = {"program": program, "params": params,
                "effective_defaults": effective_defaults or {},
                "table_notes": llm1.table_view(table)}
@@ -34,8 +46,7 @@ def semantic_audit(program: str, params: dict, table, llm: LLMClient,
         {"role": "user", "content": json.dumps(payload, sort_keys=True)},
     ], role="llm1")
     try:
-        advisories = llm1.parse_advisories(raw)
+        return llm1.parse_audit(raw)
     except ValueError:
-        return ["The automatic review couldn't be read this time - please "
-                "give the program a quick manual look."]
-    return advisories
+        return (["The automatic review couldn't be read this time - please "
+                 "give the program a quick manual look."], None)

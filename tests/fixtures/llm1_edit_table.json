@@ -1,0 +1,3 @@
+{"action": "edit_table",
+ "add": [{"type": "DO", "index": 100, "comment": "dispenser on",
+          "value": "OFF"}]}

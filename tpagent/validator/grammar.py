@@ -364,6 +364,14 @@ def check(text: str) -> tuple[list[Err], dict]:
         content = m.group(2).strip()
         if not content or content.startswith("!"):
             continue
+        if re.search(r":\s*\]", content):
+            errors.append(Err(
+                layer="grammar", line=mn_no, found=content,
+                message="There is an empty label after ':' inside brackets "
+                        "- write PR[10,3] for an element, or PR[10:note] "
+                        "with a real note."))
+            bad_lines.add(i + 1)
+            continue
         family = _leading_family(content)
         if family is None:
             found = content.split()[0]

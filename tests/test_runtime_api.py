@@ -81,6 +81,54 @@ class TestHandle:
         assert "PR[5] already exists" in ads        # the override, refused
         assert resp.report.positions["PR[2]"] == "note 'position 2'"
 
+    def test_edit_table_turn_changes_no_program(self, env, monkeypatch):
+        # a table-only request: no program, the updated CSV rides back
+        monkeypatch.setenv("TP_LLM1",
+                           "mock:tests/fixtures/llm1_edit_table.json")
+        recorder = StepsRecorder()
+        resp = handle(Request(prompt="add DO[100] to the table with "
+                                     "description dispenser on, set false",
+                              cell_id="line3_fanuc1"), recorder=recorder)
+        assert resp.status == "needs_clarification"
+        assert "DO[100]" in resp.questions[0]
+        assert "DO,100,dispenser on,,OFF" in resp.table_csv
+        assert "# cell_id: line3_fanuc1" in resp.table_csv
+        assert [s["module"] for s in recorder.steps] == ["LLM1-Intake"]
+
+    def test_edit_previous_sends_program_to_renderer(self, env, monkeypatch):
+        import json as _json
+        monkeypatch.setenv("TP_LLM1", "mock:tests/fixtures/llm1_editprev.json,"
+                                      "tests/fixtures/llm1_audit.json")
+        monkeypatch.setenv("TP_LLM2", "mock:tests/fixtures/edited_fixA.ls")
+        recorder = StepsRecorder()
+        old = ("/PROG OLDPROG\n/ATTR\nOWNER = MNEDITOR;\n/MN\n"
+               "   1:  J PR[1:home] 100% FINE ;\n/POS\n/END\n")
+        resp = handle(Request(prompt="edit the program - end at fixture A",
+                              previous_ls=old,
+                              cell_id="line3_fanuc1"), recorder=recorder)
+        assert resp.status == "ok"
+        codegen = next(s for s in recorder.steps
+                       if s["module"] == "LLM2-Codegen")
+        blob = _json.dumps(codegen["prompt"])
+        assert "PREVIOUS PROGRAM" in blob and "OLDPROG" in blob
+
+    def test_audit_must_fix_triggers_one_retry(self, env, monkeypatch):
+        monkeypatch.setenv("TP_LLM1", "mock:tests/fixtures/llm1_gen.json,"
+                                      "tests/fixtures/llm1_audit_mustfix.json,"
+                                      "tests/fixtures/llm1_audit.json")
+        monkeypatch.setenv("TP_LLM2", "mock:tests/fixtures/v2.ls,"
+                                      "tests/fixtures/v2.ls")
+        recorder = StepsRecorder()
+        resp = handle(Request(prompt="pick and place",
+                              cell_id="line3_fanuc1"), recorder=recorder)
+        assert resp.status == "ok"
+        modules_seen = [s["module"] for s in recorder.steps]
+        assert modules_seen == ["LLM1-Intake", "LLM2-Codegen", "LLM1-Audit",
+                               "LLM2-Codegen", "LLM1-Audit"]
+        assert resp.report.retries == 1
+        assert any("requested one correction" in a
+                   for a in resp.report.advisories)
+
     def test_ask_user_flow(self, env, monkeypatch):
         monkeypatch.setenv("TP_LLM1", "mock:tests/fixtures/llm1_ask.json")
         resp = handle(Request(prompt="put it on the fixture",

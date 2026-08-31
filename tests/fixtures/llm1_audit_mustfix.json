@@ -1,0 +1,2 @@
+{"advisories": ["The release uses the close signal."],
+ "must_fix": "use RO[2] gripper open to release the part instead of RO[1]"}

@@ -6,6 +6,7 @@ in the file, so they can never contradict the type column.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 import csv, io
 
 IO_DIR = {t: "in" for t in ("DI", "RI", "UI", "SI", "GI", "AI")} | \
@@ -47,6 +48,23 @@ class RegIOTable:
 
 class SchemaError(ValueError):
     """Raised when the CSV is not a valid reg_io_v1 file -> level-A reject."""
+
+
+def to_reg_io_csv(table: RegIOTable) -> str:
+    """Serialize a table back to reg_io_v1 text (round-trips with the
+    parser). Used when a conversation edit produces an updated table the
+    caller should carry forward."""
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\n")
+    w.writerow(["type", "index", "comment", "initialized", "value"])
+    for e in table.entries:
+        init = ("" if e.initialized is None
+                else "TRUE" if e.initialized else "FALSE")
+        w.writerow([e.type, e.index, e.comment, init, e.value])
+    scanned = table.scanned_at or datetime.now(timezone.utc).isoformat(
+        timespec="seconds")
+    return (f"# schema: reg_io_v1\n# cell_id: {table.cell_id}\n"
+            f"# scanned_at: {scanned}\n" + out.getvalue())
 
 
 def parse_reg_io_csv(raw: str) -> RegIOTable:
