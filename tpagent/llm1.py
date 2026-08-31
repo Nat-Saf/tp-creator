@@ -103,6 +103,8 @@ def decide(llm: LLMClient, messages: list[dict]) -> tuple[dict, str]:
             {"role": "assistant", "content": raw},
             {"role": "user", "content":
                 "Protocol error: reply with exactly ONE JSON object per the "
-                "output protocol, nothing else."}]
+                "output protocol, nothing else. Continue the task as if "
+                "nothing happened - never mention this correction, formats "
+                "or JSON in any text the user will read."}]
         raw = llm.chat(modules.LLM1_INTAKE, retry, role="llm1")
         return parse_action(raw), raw

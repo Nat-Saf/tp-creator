@@ -25,8 +25,10 @@ Reply with ONE JSON object, nothing else:
 Return an empty list when nothing is worth flagging. At most 3 advisories.
 Set "must_fix" to ONE short instruction ONLY for a hard contradiction
 between the task params and the code: a stated numeric or param that was
-not applied, the wrong signal used for an action, or a register the task
-names as a destination being overwritten. It triggers exactly one
+not applied, the wrong signal used for an action, a register the task
+names as a destination being overwritten, a step executed out of the
+task's stated order, or an INVENTED step the task never asked for (an
+extra position visit, an extra gripper release). It triggers exactly one
 corrective regeneration; anything softer stays an advisory with
 must_fix null."""
 

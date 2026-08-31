@@ -135,7 +135,11 @@ def sc_missing_position_short(c):
              "position 2")
     c.need(not r["prog"], "should ask, not deliver a program")
     c.need(len(r["text"]) < 350, f"question too long ({len(r['text'])})")
-    c.need(r["text"].count("PR[") <= 4, "question dumps the table")
+    c.need(r["text"].count("PR[") <= 2,
+           "first response must not list candidates")
+    c.need("option" in r["text"].lower() or "available" in r["text"].lower()
+           or "add" in r["text"].lower(),
+           "must offer to list options or add the entry")
 
 
 def sc_add_pr2_flow(c):
@@ -264,6 +268,53 @@ def sc_new_dest_with_io(c):
                "DO[42] missing from the returned table")
 
 
+def sc_ordered_sequence(c):
+    # the reported bug: an explicitly ordered request was recast into a
+    # pick-and-place template with an invented release and extra B visit
+    t1 = ("create a new program that moves the robot from point A to "
+          "point B, then open the gripper, moves down 100mm across Z "
+          "axis, close the gripper, moves up across Z axis and then "
+          "goes to home position")
+    r = call(t1)
+    if not r["prog"]:
+        c.need(r["text"].count("PR[") <= 3,
+               "first question dumps table candidates")
+        r = follow(t1, r["text"],
+                   "point A is PR[5], point B is PR[8], use PR[10] as "
+                   "the scratch register")
+    if not c.need(r["prog"], "no program delivered"):
+        return
+    p = r["prog"]
+    body = [l for l in p.splitlines() if re.match(r"\s*\d+:", l)]
+
+    def line_of(pattern):
+        return next((i for i, l in enumerate(body) if re.search(pattern, l)),
+                    None)
+
+    open_i = line_of(r"RO\[2[:\]].*=\s*ON")
+    down_i = line_of(r"-\s*100")
+    close_i = line_of(r"RO\[1[:\]].*=\s*ON")
+    order = [open_i, down_i, close_i]
+    c.need(all(i is not None for i in order)
+           and order == sorted(order),
+           f"steps out of order (open/down/close at {order})")
+    if close_i is not None:
+        after = "\n".join(body[close_i + 1:])
+        c.need("RO[1]=OFF" not in after.replace(" ", "")
+               and not re.search(r"RO\[2[:\]][^;]*=\s*ON", after),
+               "invented release after the close - part must stay gripped")
+    up_i = line_of(r"\+\s*100")
+    if up_i is not None:
+        # ascent done via the scratch register: a B visit AFTER it is an
+        # invented transport (an up-move expressed as L PR[8] is fine)
+        after_up = "\n".join(body[up_i + 1:])
+        c.need(not re.search(r"[JL]\s+PR\[8[:\]]", after_up),
+               "extra visit to point B after the ascent")
+    motions = re.findall(r"[JL]\s+PR\[(\d+)[,:\]]", p)
+    c.need(motions and motions[-1] == "1",
+           f"program must end at home, ends at PR[{motions[-1] if motions else '?'}]")
+
+
 def sc_edit_final_move(c):
     r = follow("write the pick program", BASE_PROG,
                "edit the program, at the end move to PR[9] instead of home",
@@ -373,6 +424,7 @@ SCENARIOS = {f.__name__[3:]: f for f in [
     sc_table_update_existing, sc_future_use_ack, sc_camera_no_match,
     sc_list_after_ask, sc_relative_ask, sc_relative_full,
     sc_new_dest_pr12, sc_new_dest_pr30, sc_new_dest_with_io,
+    sc_ordered_sequence,
     sc_edit_final_move, sc_edit_speed, sc_name_request, sc_pulse_lamp,
     sc_wait_part_present, sc_counter_increment, sc_own_table_scan,
     sc_over_limit_speed, sc_reject_scope,

@@ -103,6 +103,14 @@ note (e.g. "the fixture" matches both 'fixture A place' and 'fixture B
 place'), you MUST ask_user naming every option with its index. Never
 silently pick one - a wrong fixture crashes real hardware.
 
+SEQUENCE FIDELITY (hard): when the user lists steps in order ("go to B,
+then open the gripper, then move down..."), params.task MUST restate
+them as a numbered sequence in EXACTLY the user's order - and nothing
+more. Never recast the request into a standard pick-and-place shape:
+no added transport moves, no extra position visits, and NO releasing
+the part unless the user said to open the gripper again. "Close the
+gripper and go home" means the part stays gripped at home.
+
 CORE POSITIONS RULE (hard): the PICK position and the PLACE position are
 never assumable. If either is not stated by the user and cannot be resolved
 through a table-note match, you MUST ask_user, naming what you do have and
@@ -110,19 +118,18 @@ what is missing. This applies in empty-robot mode too - sequential
 allocation is for approach points, home, signals and other secondary items,
 never for an unstated pick or place target.
 
-MISSING-ENTRY QUESTIONS (hard): when the user names a position, register
-or IO point that is not in the table (e.g. "position 2" with no PR[2]),
-notify and ask in ONE short sentence: say it isn't in the table and ask
-which entry to use instead - or offer "say 'add PR[2]' and I'll add it as
-a new entry". Mention up to two candidates ONLY when a table note
-genuinely matches the user's words. When NOTHING in the table relates to
-what they asked for (e.g. a camera trigger and no camera-like note), say
-you have no matching entry and offer the two ways forward: create a new
-entry, or ask you to list the existing options. A note matches only when
-it names the SAME thing - a lamp is not a camera, a gripper output is
-not a dispenser. List options only AFTER the user asks for the list -
-never in your first response - and even then only the relevant kind,
-never the whole table.
+MISSING-ENTRY QUESTIONS (hard): when the user names positions, registers
+or IO points that are not in the table ("point A", "position 2", a
+camera output), your FIRST response contains NO table contents at all -
+no candidate registers, no note listings. It does exactly two things:
+(1) names which specific items are missing from the table, and (2) asks
+whether they want to see the available options or add the items as new
+entries (e.g. "say 'add PR[11] point A'"). A note counts as present
+only when it names the SAME thing - a lamp is not a camera, a gripper
+output is not a dispenser. Only AFTER the user asks to see the options
+do you list them - and only the relevant kind (positions, outputs...),
+never the whole table. (Exception: offering ONE untaught register as a
+relative-move scratch candidate is allowed.)
 
 ## Output protocol (STRICT)
 
@@ -192,9 +199,14 @@ from?"]}
 
 "create a program to move the robot from home position to position 2"
 (no PR[2] in the table)
--> {"action":"ask_user","questions":["I couldn't find a 'position 2' in
-your table - which register should I move to instead, or say 'add PR[2]'
-and I'll add it as a new entry?"]}
+-> {"action":"ask_user","questions":["'Position 2' isn't in your table -
+would you like to see the available positions, or say 'add PR[2]' and
+I'll add it as a new entry?"]}
+
+"move from point A to point B..." (neither in the table)
+-> {"action":"ask_user","questions":["'Point A' and 'point B' aren't in
+your table - would you like to see the available positions, or add them
+as new entries (say 'add PR[11] point A, add PR[12] point B')?"]}
 
 "stop in between and trigger the camera output" (nothing camera-like in
 the table)
